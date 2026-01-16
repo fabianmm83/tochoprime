@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext'; // Importar useAuth
+import { AuthProvider, useAuth } from './context/AuthContext';
 import PrivateRoute from './components/auth/PrivateRoute';
 import RoleBasedRoute from './components/auth/RoleBasedRoute';
 
@@ -16,6 +16,8 @@ import PlayerDashboard from './pages/PlayerDashboard';
 import CaptainPanel from './pages/CaptainPanel';
 import RefereePanel from './pages/RefereePanel';
 import AdminDashboard from './pages/AdminDashboard';
+
+import LandingPage from './pages/LandingPage';
 
 // Páginas del sistema existentes
 import Seasons from './pages/Seasons';
@@ -35,7 +37,7 @@ import LeagueDetail from './pages/LeagueDetail';
 
 // Componente para redirección por rol
 const RoleBasedRedirect: React.FC = () => {
-  const { userData } = useAuth(); // Usar useAuth correctamente dentro del componente
+  const { userData } = useAuth();
   
   if (!userData) {
     return <Navigate to="/login" replace />;
@@ -52,7 +54,7 @@ const RoleBasedRedirect: React.FC = () => {
     case 'superadministrador':
       return <Navigate to="/admin" replace />;
     default:
-      return <Navigate to="/" replace />;
+      return <Navigate to="/dashboard" replace />;
   }
 };
 
@@ -62,13 +64,21 @@ function App() {
       <AuthProvider>
         <Routes>
           {/* ==================== RUTAS PÚBLICAS ==================== */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           
           {/* ==================== RUTAS PRINCIPALES POR ROL ==================== */}
           
+          {/* Redirección automática basada en rol */}
+          <Route path="/redirect" element={
+            <PrivateRoute>
+              <RoleBasedRedirect />
+            </PrivateRoute>
+          } />
+          
           {/* Dashboard principal - para todos los usuarios autenticados */}
-          <Route path="/" element={
+          <Route path="/dashboard" element={
             <PrivateRoute>
               <Dashboard />
             </PrivateRoute>
@@ -142,7 +152,7 @@ function App() {
           
           <Route path="/campos" element={
             <PrivateRoute>
-              <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'capitan', 'jugador']}>
                 <Fields />
               </RoleBasedRoute>
             </PrivateRoute>
@@ -176,7 +186,7 @@ function App() {
           {/* Partidos */}
           <Route path="/partidos" element={
             <PrivateRoute>
-              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro', 'capitan', 'jugador']}>
                 <Matches />
               </RoleBasedRoute>
             </PrivateRoute>
@@ -216,7 +226,7 @@ function App() {
           
           <Route path="/calendario" element={
             <PrivateRoute>
-              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro', 'capitan', 'jugador', 'espectador']}>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro', 'capitan', 'jugador']}>
                 <Calendar />
               </RoleBasedRoute>
             </PrivateRoute>
@@ -267,16 +277,7 @@ function App() {
           <Route path="/leagues" element={<Navigate to="/ligas" replace />} />
           <Route path="/leagues/:id" element={<Navigate to="/ligas/:id" replace />} />
           
-          {/* ==================== RUTAS ESPECIALES ==================== */}
-          
-          {/* Redirección automática basada en rol */}
-          <Route path="/redirect-by-role" element={
-            <PrivateRoute>
-              <RoleBasedRedirect />
-            </PrivateRoute>
-          } />
-          
-          {/* Ruta por defecto - redirige según rol o al login */}
+          {/* ==================== RUTA 404 ==================== */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
