@@ -1,9 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Usar Date.now() para timestamp único
-const timestamp = Date.now()
-
 export default defineConfig({
   plugins: [react()],
   build: {
@@ -11,10 +8,10 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        // ✅ CORREGIDO: Usar [hash] correctamente, no [timestamp]
-        entryFileNames: `assets/[name]-[hash]-${timestamp}.js`,
-        chunkFileNames: `assets/[name]-[hash]-${timestamp}.js`,
-        assetFileNames: `assets/[name]-[hash]-${timestamp}.[ext]`,
+        // ✅ CORREGIDO: Placeholders correctos para Rollup
+        entryFileNames: `assets/[name]-[hash].js`,
+        chunkFileNames: `assets/[name]-[hash].js`,
+        assetFileNames: `assets/[name]-[hash].[ext]`,
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
@@ -27,4 +24,8 @@ export default defineConfig({
     host: true
   },
   base: '/',
+  // ✅ Definir __APP_VERSION__ globalmente
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0')
+  }
 })
