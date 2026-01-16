@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Generar hash único para cada build
+// Usar Date.now() para timestamp único
 const timestamp = Date.now()
 
 export default defineConfig({
@@ -11,7 +11,7 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        // 🔥 AGREGAR TIMESTAMP AL HASH - ESTO ES CLAVE
+        // ✅ CORREGIDO: Usar [hash] correctamente, no [timestamp]
         entryFileNames: `assets/[name]-[hash]-${timestamp}.js`,
         chunkFileNames: `assets/[name]-[hash]-${timestamp}.js`,
         assetFileNames: `assets/[name]-[hash]-${timestamp}.[ext]`,
