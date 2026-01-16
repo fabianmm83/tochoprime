@@ -1,950 +1,757 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { fieldsService } from '../services/firestore';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  ArrowLeft, 
+  Share2, 
+  MapPin, 
+  Trophy,
+  User,
+  Home,
+  Coffee,
+  Waves,
+  Wifi,
+  Anchor,
+  Calendar,
+  Clock,
+  Users,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Maximize2
+} from 'lucide-react';
+import { fieldService } from '../services/firestore';
 import { Field } from '../types';
-import {
-  PlusIcon,
-  MapPinIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  PencilIcon,
-  TrashIcon,
-  MagnifyingGlassIcon,
-  FunnelIcon,
-  EyeIcon,
-  CalendarIcon,
-  UserGroupIcon,
-  BuildingOfficeIcon,
-  MapIcon,
-  ListBulletIcon,
-  ArrowLeftIcon
-} from '@heroicons/react/24/outline';
-import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Notification from '../components/common/Notification';
 
-// Helper para crear campos estáticos con las propiedades CORRECTAS según tu interfaz Field
-const createStaticField = (
-  id: string,
-  code: string,
-  locationZone: string,
-  status: Field['status'],
-  priority: number,
-  type?: Field['type']
-): Field => ({
-  id,
-  code,
-  name: code,
-  type: type || (locationZone.includes('Left') ? 'arena' as const : 'césped' as const),
-  capacity: locationZone.includes('Left') ? 80 : 100,
-  status,
-  priority,
-  facilities: ['iluminación', 'vestuarios', 'gradas'],
-  location: {
-    address: `Sede Cuemanco Isla 5, ${locationZone}`,
-    city: 'Ciudad de México'
-  },
-  notes: `${code} de la sede principal`,
-  isActive: true,
-  createdAt: new Date().toISOString(), // Convertir a string
-  updatedAt: new Date().toISOString(), // Convertir a string
-});
+// INTERFAZ LOCAL para el tipo de notificación
+interface NotificationType {
+  type: 'success' | 'error' | 'info' | 'warning';
+  message: string;
+}
 
-// Mapa estático de sedes Cuemanco Isla 5 - CORREGIDO: Sin createdBy/updatedBy
-const STATIC_FIELDS: Field[] = [
-  // Top Row (9, 8, 7)
-  createStaticField('field-9', 'CAMPO 9', 'Top Row', 'available', 1),
-  createStaticField('field-8', 'CAMPO 8', 'Top Row', 'available', 2),
-  createStaticField('field-7', 'CAMPO 7', 'Top Row', 'maintenance', 3),
-  
-  // Middle Row (4, 5, 6)
-  createStaticField('field-4', 'CAMPO 4', 'Middle Row', 'reserved', 4, 'sintético'),
-  createStaticField('field-5', 'CAMPO 5', 'Middle Row', 'available', 5, 'sintético'),
-  createStaticField('field-6', 'CAMPO 6', 'Middle Row', 'available', 6, 'sintético'),
-  
-  // Bottom Row (1, 2, 3)
-  createStaticField('field-1', 'CAMPO 1', 'Bottom Row', 'available', 7),
-  createStaticField('field-2', 'CAMPO 2', 'Bottom Row', 'unavailable', 8),
-  createStaticField('field-3', 'CAMPO 3', 'Bottom Row', 'available', 9),
-  
-  // Left Side (13, 14)
-  createStaticField('field-13', 'CAMPO 13', 'Left Side', 'available', 10, 'arena'),
-  createStaticField('field-14', 'CAMPO 14', 'Left Side', 'maintenance', 11, 'arena'),
-  
-  // Right Side (11, 10, 12)
-  createStaticField('field-11', 'CAMPO 11', 'Right Side', 'available', 12),
-  createStaticField('field-10', 'CAMPO 10', 'Right Side', 'reserved', 13),
-  createStaticField('field-12', 'CAMPO 12', 'Right Side', 'available', 14),
-  
-  // Extra fields for 16 total
-  createStaticField('field-15', 'CAMPO 15', 'Bottom Row', 'available', 15, 'sintético'),
-  createStaticField('field-16', 'CAMPO 16', 'Bottom Row', 'available', 16, 'sintético'),
+// Datos predeterminados de los campos en Cuemanco Isla 5 - CORREGIDO para usar tipos válidos
+const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
+  { 
+    code: 'Campo 1', 
+    name: 'Campo Deportivo 1', 
+    type: 'césped', 
+    capacity: 14, 
+    facilities: ['iluminación', 'vestuarios'], 
+    location: { address: 'Isla 5 - Zona Central', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 1, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 2', 
+    name: 'Campo Deportivo 2', 
+    type: 'césped', 
+    capacity: 14, 
+    facilities: ['iluminación', 'vestuarios'], 
+    location: { address: 'Isla 5 - Zona Central', city: 'Ciudad Deportiva' }, 
+    status: 'reserved', // Cambiado de 'occupied' a 'reserved'
+    priority: 1, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 3', 
+    name: 'Campo Deportivo 3', 
+    type: 'césped', 
+    capacity: 14, 
+    facilities: ['iluminación'], 
+    location: { address: 'Isla 5 - Zona Central', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 1, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 4', 
+    name: 'Campo Deportivo 4', 
+    type: 'sintético', 
+    capacity: 14, 
+    facilities: ['iluminación', 'gradas'], 
+    location: { address: 'Isla 5 - Zona Superior', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 2, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 5', 
+    name: 'Campo Deportivo 5', 
+    type: 'sintético', 
+    capacity: 14, 
+    facilities: ['iluminación'], 
+    location: { address: 'Isla 5 - Zona Superior', city: 'Ciudad Deportiva' }, 
+    status: 'maintenance', 
+    priority: 2, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 6', 
+    name: 'Campo Deportivo 6', 
+    type: 'sintético', 
+    capacity: 14, 
+    facilities: ['iluminación', 'vestuarios'], 
+    location: { address: 'Isla 5 - Zona Superior', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 2, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 7', 
+    name: 'Campo Deportivo 7', 
+    type: 'césped', 
+    capacity: 14, 
+    facilities: ['iluminación', 'estacionamiento'], 
+    location: { address: 'Isla 5 - Entrada', city: 'Ciudad Deportiva' }, 
+    status: 'reserved', // Cambiado de 'occupied' a 'reserved'
+    priority: 3, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 8', 
+    name: 'Campo Deportivo 8', 
+    type: 'césped', 
+    capacity: 14, 
+    facilities: ['iluminación', 'estacionamiento'], 
+    location: { address: 'Isla 5 - Entrada', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 3, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 9', 
+    name: 'Campo Deportivo 9', 
+    type: 'césped', 
+    capacity: 14, 
+    facilities: ['iluminación'], 
+    location: { address: 'Isla 5 - Entrada', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 3, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 10', 
+    name: 'Campo Deportivo 10', 
+    type: 'sintético', 
+    capacity: 14, 
+    facilities: ['iluminación', 'baños'], 
+    location: { address: 'Isla 5 - Zona Inferior', city: 'Ciudad Deportiva' }, 
+    status: 'reserved', // Cambiado de 'occupied' a 'reserved'
+    priority: 4, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 11', 
+    name: 'Campo Deportivo 11', 
+    type: 'sintético', 
+    capacity: 14, 
+    facilities: ['iluminación', 'baños'], 
+    location: { address: 'Isla 5 - Zona Inferior', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 4, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 12', 
+    name: 'Campo Deportivo 12', 
+    type: 'sintético', 
+    capacity: 14, 
+    facilities: ['iluminación', 'gradas', 'baños'], 
+    location: { address: 'Isla 5 - Zona Inferior', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 4, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 13', 
+    name: 'Campo Deportivo 13', 
+    type: 'césped', 
+    capacity: 12, 
+    facilities: ['iluminación'], 
+    location: { address: 'Isla 5 - Lateral Izquierdo', city: 'Ciudad Deportiva' }, 
+    status: 'maintenance', 
+    priority: 5, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 14', 
+    name: 'Campo Deportivo 14', 
+    type: 'césped', 
+    capacity: 12, 
+    facilities: ['iluminación'], 
+    location: { address: 'Isla 5 - Lateral Izquierdo', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 5, 
+    isActive: true 
+  },
 ];
 
 const Fields: React.FC = () => {
-  const [activeView, setActiveView] = useState<'map' | 'list'>('map');
+  const navigate = useNavigate();
   const [fields, setFields] = useState<Field[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedField, setSelectedField] = useState<Field | null>(null);
-  const [editingField, setEditingField] = useState<Field | null>(null);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
-  
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-
-  const [newField, setNewField] = useState({
-    code: '',
-    name: '',
-    type: 'césped' as Field['type'],
-    capacity: 100,
-    facilities: ['iluminación', 'vestuarios'],
-    location: {
-      address: 'Sede Cuemanco Isla 5',
-      city: 'Ciudad de México'
-    },
-    status: 'available' as Field['status'],
-    priority: 1,
-    notes: '',
-    isActive: true,
-  });
+  const [view3D, setView3D] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [notification, setNotification] = useState<NotificationType | null>(null);
 
   useEffect(() => {
-    fetchFields();
+    loadFields();
   }, []);
 
-  const fetchFields = async () => {
+  const loadFields = async () => {
     try {
       setLoading(true);
-      const fieldsData = await fieldsService.getFields();
+      const fieldsData = await fieldService.getFields();
       
-      // Si no hay campos en la base de datos, usar los estáticos
       if (fieldsData.length === 0) {
-        setFields(STATIC_FIELDS);
+        // Crear campos predeterminados si no existen
+        console.log('Creando campos predeterminados...');
+        for (const fieldData of DEFAULT_FIELDS) {
+          await fieldService.createField(fieldData);
+        }
+        // Recargar campos
+        const newFields = await fieldService.getFields();
+        setFields(newFields);
+        setNotification({ type: 'success', message: 'Campos predeterminados creados exitosamente' });
       } else {
         setFields(fieldsData);
       }
     } catch (error) {
-      console.error('Error fetching fields:', error);
+      console.error('Error cargando campos:', error);
       setNotification({ type: 'error', message: 'Error al cargar los campos' });
     } finally {
       setLoading(false);
     }
   };
 
-  // Filtrar campos según búsqueda y filtros
-  const filteredFields = useMemo(() => {
-    return fields.filter(field => {
-      // Search filter
-      if (searchTerm && !field.code.toLowerCase().includes(searchTerm.toLowerCase()) && 
-          !field.name.toLowerCase().includes(searchTerm.toLowerCase())) {
-        return false;
-      }
-      
-      // Status filter
-      if (statusFilter !== 'all' && field.status !== statusFilter) {
-        return false;
-      }
-      
-      // Type filter
-      if (typeFilter !== 'all' && field.type !== typeFilter) {
-        return false;
-      }
-      
-      return true;
-    });
-  }, [fields, searchTerm, statusFilter, typeFilter]);
-
-  const handleCreateField = async () => {
-    try {
-      const fieldToCreate = {
-        ...newField,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      await fieldsService.createField(fieldToCreate);
-      setNotification({ type: 'success', message: 'Campo creado exitosamente' });
-      setShowCreateModal(false);
-      resetForm();
-      fetchFields();
-    } catch (error) {
-      console.error('Error creating field:', error);
-      setNotification({ type: 'error', message: 'Error al crear el campo' });
-    }
+  const handleFieldClick = (field: Field) => {
+    setSelectedField(field);
+    setShowDetails(true);
   };
 
-  const handleUpdateField = async () => {
-    if (!editingField) return;
-
-    try {
-      const fieldToUpdate = {
-        ...newField,
-        updatedAt: new Date().toISOString(),
-      };
-      
-      await fieldsService.updateField(editingField.id, fieldToUpdate);
-      setNotification({ type: 'success', message: 'Campo actualizado exitosamente' });
-      setShowCreateModal(false);
-      setEditingField(null);
-      resetForm();
-      fetchFields();
-    } catch (error) {
-      console.error('Error updating field:', error);
-      setNotification({ type: 'error', message: 'Error al actualizar el campo' });
-    }
-  };
-
-  const handleChangeStatus = async (fieldId: string, newStatus: Field['status']) => {
-    try {
-      await fieldsService.updateField(fieldId, { 
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
-      setNotification({ type: 'success', message: 'Estado actualizado exitosamente' });
-      fetchFields();
-    } catch (error) {
-      console.error('Error updating field status:', error);
-      setNotification({ type: 'error', message: 'Error al actualizar el estado' });
-    }
-  };
-
-  const resetForm = () => {
-    setNewField({
-      code: '',
-      name: '',
-      type: 'césped',
-      capacity: 100,
-      facilities: ['iluminación', 'vestuarios'],
-      location: {
-        address: 'Sede Cuemanco Isla 5',
-        city: 'Ciudad de México'
-      },
-      status: 'available',
-      priority: 1,
-      notes: '',
-      isActive: true,
-    });
-    setEditingField(null);
-  };
-
-  const editField = (field: Field) => {
-    setEditingField(field);
-    setNewField({
-      code: field.code,
-      name: field.name,
-      type: field.type,
-      capacity: field.capacity,
-      facilities: [...field.facilities],
-      location: {
-        address: field.location.address,
-        city: field.location.city
-      },
-      status: field.status,
-      priority: field.priority,
-      notes: field.notes || '',
-      isActive: field.isActive,
-    });
-    setShowCreateModal(true);
-  };
-
-  const addFacility = () => {
-    setNewField({ ...newField, facilities: [...newField.facilities, ''] });
-  };
-
-  const removeFacility = (index: number) => {
-    const newFacilities = newField.facilities.filter((_, i) => i !== index);
-    setNewField({ ...newField, facilities: newFacilities });
-  };
-
-  const updateFacility = (index: number, value: string) => {
-    const newFacilities = [...newField.facilities];
-    newFacilities[index] = value;
-    setNewField({ ...newField, facilities: newFacilities });
+  const handleNavigate = (path: string) => {
+    navigate(path);
   };
 
   const getStatusColor = (status: Field['status']) => {
     switch (status) {
-      case 'available': return 'bg-green-500 text-white';
-      case 'maintenance': return 'bg-yellow-500 text-white';
-      case 'reserved': return 'bg-blue-500 text-white';
-      case 'unavailable': return 'bg-red-500 text-white';
-      default: return 'bg-gray-500 text-white';
+      case 'available': return 'bg-green-500';
+      case 'reserved': return 'bg-red-500'; // Usamos 'reserved' en lugar de 'occupied'
+      case 'maintenance': return 'bg-yellow-500';
+      case 'unavailable': return 'bg-gray-500';
+      default: return 'bg-gray-500';
     }
   };
 
   const getStatusText = (status: Field['status']) => {
     switch (status) {
       case 'available': return 'Libre';
+      case 'reserved': return 'Ocupado'; // Mostramos "Ocupado" para 'reserved'
       case 'maintenance': return 'Mantenimiento';
-      case 'reserved': return 'Reservado';
-      case 'unavailable': return 'Ocupado';
+      case 'unavailable': return 'No disponible';
       default: return 'Desconocido';
     }
   };
 
-  const getTypeText = (type: Field['type']) => {
-    switch (type) {
-      case 'césped': return 'Césped';
-      case 'sintético': return 'Sintético';
-      case 'arena': return 'Arena';
-      case 'otros': return 'Otros';
-      default: return type;
+  const getStatusIcon = (status: Field['status']) => {
+    switch (status) {
+      case 'available': return <CheckCircle size={16} className="text-green-500" />;
+      case 'reserved': return <XCircle size={16} className="text-red-500" />;
+      case 'maintenance': return <AlertCircle size={16} className="text-yellow-500" />;
+      case 'unavailable': return <Clock size={16} className="text-gray-500" />;
+      default: return <AlertCircle size={16} className="text-gray-500" />;
     }
   };
 
+  const getFieldByNumber = (number: number): Field | undefined => {
+    return fields.find(field => {
+      const match = field.code.match(/\d+/);
+      return match && parseInt(match[0]) === number;
+    });
+  };
+
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-sky-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
+    <div className="min-h-screen bg-gradient-to-b from-sky-50 to-blue-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 pt-4 pb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Campos Deportivos</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Sede Cuemanco Isla 5 • {fields.length} campos disponibles
-            </p>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setActiveView(activeView === 'map' ? 'list' : 'map')}
-              className="p-3 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-colors"
+      <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button 
+              onClick={() => navigate(-1)}
+              className="p-2 -ml-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              {activeView === 'map' ? (
-                <ListBulletIcon className="w-5 h-5" />
-              ) : (
-                <MapIcon className="w-5 h-5" />
-              )}
+              <ArrowLeft size={20} />
             </button>
-            <button
+            
+            <div className="text-center">
+              <h1 className="text-sm font-bold tracking-tight text-gray-900 dark:text-white uppercase">
+                Mapa de Sedes
+              </h1>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                Sede Cuemanco Isla 5
+              </p>
+            </div>
+            
+            <button 
               onClick={() => {
-                resetForm();
-                setShowCreateModal(true);
+                if (navigator.share) {
+                  navigator.share({
+                    title: 'Mapa de Sedes - Tocho Prime',
+                    text: 'Revisa los campos disponibles en Cuemanco Isla 5',
+                    url: window.location.href,
+                  }).catch(err => {
+                    console.log('Error al compartir:', err);
+                  });
+                } else {
+                  navigator.clipboard.writeText(window.location.href).then(() => {
+                    setNotification({ type: 'success', message: 'Enlace copiado al portapapeles' });
+                  }).catch(err => {
+                    console.log('Error al copiar:', err);
+                  });
+                }
               }}
-              className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+              className="p-2 -mr-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              <PlusIcon className="w-5 h-5" />
+              <Share2 size={20} />
             </button>
           </div>
         </div>
+      </header>
 
-        {/* Search and Filters */}
-        <div className="space-y-3">
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por código o nombre..."
-              className="w-full pl-10 pr-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
+      {/* Status Legend */}
+      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+        <div className="flex gap-4 items-center">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Libre</span>
           </div>
-
-          <div className="flex overflow-x-auto space-x-3 pb-2">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-4 py-2 rounded-lg whitespace-nowrap ${statusFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setStatusFilter('available')}
-              className={`px-4 py-2 rounded-lg whitespace-nowrap ${statusFilter === 'available' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
-            >
-              Libre
-            </button>
-            <button
-              onClick={() => setStatusFilter('reserved')}
-              className={`px-4 py-2 rounded-lg whitespace-nowrap ${statusFilter === 'reserved' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}
-            >
-              Reservado
-            </button>
-            <button
-              onClick={() => setStatusFilter('maintenance')}
-              className={`px-4 py-2 rounded-lg whitespace-nowrap ${statusFilter === 'maintenance' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}
-            >
-              Mantenimiento
-            </button>
-            <button
-              onClick={() => setStatusFilter('unavailable')}
-              className={`px-4 py-2 rounded-lg whitespace-nowrap ${statusFilter === 'unavailable' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}
-            >
-              Ocupado
-            </button>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Ocupado</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Mantenimiento</span>
           </div>
         </div>
+        
+        <button
+          onClick={() => setView3D(!view3D)}
+          className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        >
+          <Maximize2 size={14} />
+          <span className="text-xs font-bold uppercase tracking-wider">
+            {view3D ? 'Vista 2D' : 'Vista 3D'}
+          </span>
+        </button>
       </div>
+
+      {/* Main Map Container */}
+      <main className="relative overflow-hidden bg-gradient-to-b from-blue-100 to-cyan-100 dark:from-blue-950 dark:to-cyan-900 select-none">
+        {/* Water Pattern */}
+        <div className="absolute inset-0 opacity-5 mix-blend-overlay" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2300a8ff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+        }}></div>
+
+        {/* Interactive Map */}
+        <div className="relative w-full h-[calc(100vh-180px)] max-w-[430px] mx-auto">
+          {/* Island Shape - Water Background */}
+          <div className="absolute inset-0 bg-gradient-to-b from-blue-300 to-cyan-300 dark:from-blue-800 dark:to-cyan-800 rounded-3xl m-4 shadow-2xl">
+            {/* Waves Pattern */}
+            <div className="absolute inset-0 opacity-30" style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='20' viewBox='0 0 100 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 10 C20 0, 40 20, 60 10 S80 0, 100 10 V20 H0 Z' fill='%2300a8ff' fill-opacity='0.1'/%3E%3C/svg%3E")`
+            }}></div>
+          </div>
+
+          {/* ENTRANCE AREA - Fields 7, 8, 9 */}
+          <div className="absolute top-[8%] left-[10%] w-[80%] h-[15%] bg-gradient-to-r from-green-400 to-emerald-500 dark:from-green-600 dark:to-emerald-700 rounded-2xl border-4 border-blue-900 shadow-xl flex items-center justify-around px-4">
+            {[7, 8, 9].map(num => {
+              const field = getFieldByNumber(num);
+              const fieldStatus = field?.status || 'available';
+              const isReserved = fieldStatus === 'reserved';
+              const isMaintenance = fieldStatus === 'maintenance';
+              const isUnavailable = fieldStatus === 'unavailable';
+              
+              return (
+                <button
+                  key={num}
+                  onClick={() => field && handleFieldClick(field)}
+                  className={`relative w-16 h-20 rounded-lg border-2 ${
+                    isReserved
+                      ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
+                      : isMaintenance
+                      ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
+                      : isUnavailable
+                      ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
+                      : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
+                  } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
+                >
+                  <span className="text-xl font-bold text-white">{num}</span>
+                  <span className="text-[10px] text-white font-medium mt-1">
+                    {getStatusText(fieldStatus)}
+                  </span>
+                  <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${getStatusColor(fieldStatus)}`}></div>
+                </button>
+              );
+            })}
+            
+            {/* Entrance Marker */}
+            <div className="absolute -left-6 top-1/2 -translate-y-1/2">
+              <div className="relative bg-white dark:bg-gray-800 border-2 border-blue-800 p-2 rounded-lg shadow-lg flex flex-col items-center gap-1">
+                <Anchor size={16} className="text-blue-800 dark:text-blue-400" />
+                <span className="text-[8px] font-black text-blue-800 dark:text-blue-400 uppercase">Entrada</span>
+                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white dark:bg-gray-800 border-r-2 border-b-2 border-blue-800 rotate-45"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* CENTRAL AREA - Fields 1-6 */}
+          <div className="absolute top-[25%] left-[27%] w-[62%] h-[35%] bg-gradient-to-r from-green-400 to-emerald-500 dark:from-green-600 dark:to-emerald-700 rounded-2xl border-4 border-blue-900 shadow-xl grid grid-cols-3 grid-rows-2 gap-3 p-4">
+            {[4, 5, 6, 1, 2, 3].map(num => {
+              const field = getFieldByNumber(num);
+              const fieldStatus = field?.status || 'available';
+              const isReserved = fieldStatus === 'reserved';
+              const isMaintenance = fieldStatus === 'maintenance';
+              const isUnavailable = fieldStatus === 'unavailable';
+              
+              return (
+                <button
+                  key={num}
+                  onClick={() => field && handleFieldClick(field)}
+                  className={`relative rounded-lg border-2 ${
+                    isReserved
+                      ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
+                      : isMaintenance
+                      ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
+                      : isUnavailable
+                      ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
+                      : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
+                  } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
+                >
+                  <span className="text-lg font-bold text-white">{num}</span>
+                  <span className="text-[9px] text-white font-medium">
+                    {getStatusText(fieldStatus)}
+                  </span>
+                  <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${getStatusColor(fieldStatus)}`}></div>
+                </button>
+              );
+            })}
+            
+            {/* Restrooms Icon */}
+            <div className="absolute -right-3 top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-lg border border-blue-900 flex flex-col gap-1 shadow-md">
+              <Waves size={14} className="text-blue-800 dark:text-blue-300" />
+            </div>
+          </div>
+
+          {/* LEFT SIDE AREA - Fields 13, 14 */}
+          <div className="absolute top-[32%] left-[6%] w-[16%] h-[20%] bg-gradient-to-b from-green-400 to-emerald-500 dark:from-green-600 dark:to-emerald-700 rounded-2xl border-4 border-blue-900 shadow-xl flex flex-col items-center justify-around py-3">
+            {[13, 14].map(num => {
+              const field = getFieldByNumber(num);
+              const fieldStatus = field?.status || 'available';
+              const isReserved = fieldStatus === 'reserved';
+              const isMaintenance = fieldStatus === 'maintenance';
+              const isUnavailable = fieldStatus === 'unavailable';
+              
+              return (
+                <button
+                  key={num}
+                  onClick={() => field && handleFieldClick(field)}
+                  className={`relative w-12 h-14 rounded-lg border-2 ${
+                    isReserved
+                      ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
+                      : isMaintenance
+                      ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
+                      : isUnavailable
+                      ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
+                      : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
+                  } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
+                >
+                  <span className="text-sm font-bold text-white">{num}</span>
+                  <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${getStatusColor(fieldStatus)}`}></div>
+                </button>
+              );
+            })}
+            
+            {/* Restaurant Icon */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-green-300 dark:bg-green-700/80 p-1.5 rounded-full border-2 border-white flex items-center justify-center shadow-lg">
+              <Coffee size={12} className="text-white" />
+            </div>
+          </div>
+
+          {/* BOTTOM AREA - Fields 10, 11, 12 */}
+          <div className="absolute bottom-[12%] left-[45%] w-[50%] h-[25%] bg-gradient-to-r from-green-400 to-emerald-500 dark:from-green-600 dark:to-emerald-700 rounded-2xl border-4 border-blue-900 shadow-xl p-4">
+            <div className="flex justify-between h-[60%] mb-3">
+              {[11, 10].map(num => {
+                const field = getFieldByNumber(num);
+                const fieldStatus = field?.status || 'available';
+                const isReserved = fieldStatus === 'reserved';
+                const isMaintenance = fieldStatus === 'maintenance';
+                const isUnavailable = fieldStatus === 'unavailable';
+                
+                return (
+                  <button
+                    key={num}
+                    onClick={() => field && handleFieldClick(field)}
+                    className={`relative w-[48%] rounded-lg border-2 ${
+                      isReserved
+                        ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
+                        : isMaintenance
+                        ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
+                        : isUnavailable
+                        ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
+                        : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
+                    } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
+                  >
+                    <span className="text-lg font-bold text-white">{num}</span>
+                    <span className="text-[9px] text-white font-medium">
+                      {getStatusText(fieldStatus)}
+                    </span>
+                    <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${getStatusColor(fieldStatus)}`}></div>
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div className="h-[30%]">
+              <button
+                onClick={() => {
+                  const field12 = getFieldByNumber(12);
+                  if (field12) handleFieldClick(field12);
+                }}
+                className={`relative w-full h-full rounded-lg border-2 ${
+                  getFieldByNumber(12)?.status === 'reserved'
+                    ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
+                    : getFieldByNumber(12)?.status === 'maintenance'
+                    ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
+                    : getFieldByNumber(12)?.status === 'unavailable'
+                    ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
+                    : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
+                } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
+              >
+                <span className="text-lg font-bold text-white">12</span>
+                <span className="text-[9px] text-white font-medium">
+                  {getStatusText(getFieldByNumber(12)?.status || 'available')}
+                </span>
+                <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${getStatusColor(getFieldByNumber(12)?.status || 'available')}`}></div>
+              </button>
+            </div>
+            
+            {/* Facilities Icons */}
+            <div className="absolute -right-3 top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-lg border border-blue-900 flex flex-col gap-1 shadow-md">
+              <Coffee size={14} className="text-blue-800 dark:text-blue-300" />
+              <Waves size={14} className="text-blue-800 dark:text-blue-300" />
+            </div>
+            
+            {/* WiFi Icon */}
+            <div className="absolute bottom-2 left-2 bg-green-300 dark:bg-green-700/80 p-1.5 rounded-full border-2 border-white flex items-center justify-center shadow-lg">
+              <Wifi size={12} className="text-white" />
+            </div>
+          </div>
+
+          {/* Boats on Water */}
+          <div className="absolute top-[22%] left-[40%] w-6 h-3 bg-amber-900/70 rounded-sm rotate-12"></div>
+          <div className="absolute top-[22%] left-[65%] w-6 h-3 bg-amber-900/70 rounded-sm -rotate-6"></div>
+          <div className="absolute bottom-[38%] left-[58%] w-8 h-4 bg-amber-900/70 rounded-sm rotate-45"></div>
+
+          {/* Restaurant Markers */}
+          <div className="absolute top-[50%] left-[18%] bg-green-300 dark:bg-green-700/80 p-1.5 rounded-full border-2 border-white flex items-center justify-center shadow-lg">
+            <Coffee size={14} className="text-white" />
+          </div>
+          <div className="absolute bottom-[40%] left-[43%] bg-green-300 dark:bg-green-700/80 p-1.5 rounded-full border-2 border-white flex items-center justify-center shadow-lg">
+            <Coffee size={14} className="text-white" />
+          </div>
+        </div>
+      </main>
+
+      {/* Bottom Navigation */}
+      <nav className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 pb-6 pt-4 px-6 z-50">
+        <div className="flex items-center justify-between max-w-md mx-auto">
+          <button 
+            onClick={() => handleNavigate('/')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <Home size={20} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Inicio</span>
+          </button>
+          
+          <button className="flex flex-col items-center gap-1">
+            <MapPin size={20} className="text-blue-600" />
+            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">Mapas</span>
+          </button>
+          
+          <button 
+            onClick={() => handleNavigate('/calendario')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <Trophy size={20} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Torneos</span>
+          </button>
+          
+          <button 
+            onClick={() => handleNavigate('/jugador')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <User size={20} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Perfil</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Field Details Modal */}
+      {selectedField && showDetails && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {selectedField.code}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
+                    {selectedField.name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                    {selectedField.location.address}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDetails(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl"
+                >
+                  &times;
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${
+                  selectedField.status === 'available' 
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                    : selectedField.status === 'reserved'
+                    ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                    : selectedField.status === 'maintenance'
+                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${
+                    selectedField.status === 'available' ? 'bg-green-500' :
+                    selectedField.status === 'reserved' ? 'bg-red-500' :
+                    selectedField.status === 'maintenance' ? 'bg-yellow-500' : 'bg-gray-500'
+                  }`}></div>
+                  <span className="text-sm font-semibold">{getStatusText(selectedField.status)}</span>
+                </div>
+              </div>
+              
+              <div className="space-y-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Capacidad</span>
+                  <span className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Users size={16} />
+                    {selectedField.capacity} jugadores
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Superficie</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {selectedField.type === 'césped' ? 'Césped natural' : 
+                     selectedField.type === 'sintético' ? 'Césped sintético' : 
+                     selectedField.type === 'arena' ? 'Arena' : 'Otros'}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Prioridad</span>
+                  <div className="flex items-center gap-1">
+                    {[...Array(5)].map((_, i) => (
+                      <div 
+                        key={i}
+                        className={`w-3 h-3 rounded-full ${i < (selectedField.priority || 1) ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Facilidades</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedField.facilities.map((facility, index) => (
+                      <span 
+                        key={index}
+                        className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-md"
+                      >
+                        {facility}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    navigate(`/partidos?field=${selectedField.code}`);
+                    setShowDetails(false);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <Calendar size={18} />
+                  Ver Partidos
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedField.status === 'available') {
+                      setNotification({ 
+                        type: 'success', 
+                        message: `Campo ${selectedField.code} reservado exitosamente` 
+                      });
+                      setShowDetails(false);
+                    } else {
+                      setNotification({ 
+                        type: 'error', 
+                        message: `Campo ${selectedField.code} no está disponible para reservar` 
+                      });
+                    }
+                  }}
+                  className={`flex-1 py-3 rounded-lg transition-colors font-semibold ${
+                    selectedField.status === 'available'
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                  }`}
+                  disabled={selectedField.status !== 'available'}
+                >
+                  {selectedField.status === 'available' ? 'Reservar' : 'No disponible'}
+                </button>
+              </div>
+              
+              {selectedField.notes && (
+                <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-300">{selectedField.notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notification */}
       {notification && (
         <Notification
-          type={notification.type}
+          type={notification.type as 'success' | 'error' | 'info' | 'warning'}
           message={notification.message}
           onClose={() => setNotification(null)}
         />
       )}
-
-      {/* Main Content */}
-      <div className="p-4">
-        {activeView === 'map' ? (
-          // Vista Mapa
-          <div className="space-y-6">
-            {/* Header del mapa */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">Mapa de Sedes</h2>
-                  <p className="text-sm text-gray-600">Sede Cuemanco Isla 5</p>
-                </div>
-                <div className="flex space-x-2">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                    <span className="text-sm">Libre</span>
-                  </div>
-                  <div className="flex items-center ml-4">
-                    <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                    <span className="text-sm">Ocupado</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Vista 3D - Representación de campos */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">VISTA 3D</h3>
-              
-              {/* Top Row (9, 8, 7) */}
-              <div className="mb-6">
-                <div className="text-sm font-medium text-gray-700 mb-3">Top Row (9, 8, 7)</div>
-                <div className="grid grid-cols-3 gap-3">
-                  {fields.filter(f => ['9', '8', '7'].some(num => f.code.includes(num))).map(field => (
-                    <button
-                      key={field.id}
-                      onClick={() => setSelectedField(field)}
-                      className={`p-4 rounded-xl font-bold relative overflow-hidden ${getStatusColor(field.status)} hover:opacity-90 transition-opacity`}
-                    >
-                      <div className="text-center">
-                        <div className="text-xl mb-1">{field.code}</div>
-                        <div className="text-sm opacity-90">{getStatusText(field.status)}</div>
-                        {field.status === 'reserved' && (
-                          <div className="absolute top-2 right-2">
-                            <CalendarIcon className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Middle Row (4, 5, 6) */}
-              <div className="mb-6">
-                <div className="text-sm font-medium text-gray-700 mb-3">Middle Row (4, 5, 6)</div>
-                <div className="grid grid-cols-3 gap-3">
-                  {fields.filter(f => ['4', '5', '6'].some(num => f.code.includes(num))).map(field => (
-                    <button
-                      key={field.id}
-                      onClick={() => setSelectedField(field)}
-                      className={`p-4 rounded-xl font-bold ${getStatusColor(field.status)} hover:opacity-90 transition-opacity`}
-                    >
-                      <div className="text-center">
-                        <div className="text-xl mb-1">{field.code}</div>
-                        <div className="text-sm opacity-90">{getStatusText(field.status)}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bottom Row (1, 2, 3) */}
-              <div className="mb-6">
-                <div className="text-sm font-medium text-gray-700 mb-3">Bottom Row (1, 2, 3)</div>
-                <div className="grid grid-cols-3 gap-3">
-                  {fields.filter(f => ['1', '2', '3'].some(num => f.code.includes(num))).map(field => (
-                    <button
-                      key={field.id}
-                      onClick={() => setSelectedField(field)}
-                      className={`p-4 rounded-xl font-bold ${getStatusColor(field.status)} hover:opacity-90 transition-opacity`}
-                    >
-                      <div className="text-center">
-                        <div className="text-xl mb-1">{field.code}</div>
-                        <div className="text-sm opacity-90">{getStatusText(field.status)}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Layout inferior con Left Side y Right Side */}
-              <div className="grid grid-cols-3 gap-6">
-                {/* Left Side (13, 14) */}
-                <div className="col-span-1">
-                  <div className="text-sm font-medium text-gray-700 mb-3">Left Side (13, 14)</div>
-                  <div className="space-y-3">
-                    {fields.filter(f => ['13', '14'].some(num => f.code.includes(num))).map(field => (
-                      <button
-                        key={field.id}
-                        onClick={() => setSelectedField(field)}
-                        className={`w-full p-4 rounded-xl font-bold ${getStatusColor(field.status)} hover:opacity-90 transition-opacity`}
-                      >
-                        <div className="text-center">
-                          <div className="text-xl mb-1">{field.code}</div>
-                          <div className="text-sm opacity-90">{getStatusText(field.status)}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-4 p-3 bg-gray-100 rounded-lg text-center">
-                    <span className="font-medium text-gray-900">ENTRADA</span>
-                  </div>
-                </div>
-
-                {/* Center - Spacer */}
-                <div className="col-span-1"></div>
-
-                {/* Right Side (11, 10, 12) */}
-                <div className="col-span-1">
-                  <div className="text-sm font-medium text-gray-700 mb-3">Right Side (11, 10, 12)</div>
-                  <div className="space-y-3">
-                    {fields.filter(f => ['11', '10', '12'].some(num => f.code.includes(num))).map(field => (
-                      <button
-                        key={field.id}
-                        onClick={() => setSelectedField(field)}
-                        className={`w-full p-4 rounded-xl font-bold ${getStatusColor(field.status)} hover:opacity-90 transition-opacity`}
-                      >
-                        <div className="text-center">
-                          <div className="text-xl mb-1">{field.code}</div>
-                          <div className="text-sm opacity-90">{getStatusText(field.status)}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Navigation Bar */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Bottom Navigation Bar</h3>
-              <div className="grid grid-cols-4 gap-2">
-                {['INICIO', 'MAPAS', 'TORNEOS', 'PERFIL'].map((item, index) => (
-                  <button
-                    key={index}
-                    className="py-3 bg-gray-100 hover:bg-gray-200 rounded-lg text-center font-medium text-gray-900 transition-colors"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          // Vista Lista
-          <div className="space-y-3">
-            {filteredFields.map((field) => (
-              <div
-                key={field.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:border-blue-300 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${getStatusColor(field.status)}`}>
-                      <span className="font-bold">{field.code.split(' ')[1]}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold text-gray-900 truncate">
-                          {field.code}
-                        </h3>
-                        <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(field.status)}`}>
-                          {getStatusText(field.status)}
-                        </span>
-                      </div>
-                      
-                      <p className="text-sm text-gray-600 mt-1">{field.name}</p>
-                      
-                      <div className="flex items-center space-x-4 mt-2">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <UserGroupIcon className="w-4 h-4 mr-1" />
-                          <span>{field.capacity} pers.</span>
-                        </div>
-                        <div className="flex items-center text-sm text-gray-600">
-                          <BuildingOfficeIcon className="w-4 h-4 mr-1" />
-                          <span>{getTypeText(field.type)}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center text-sm text-gray-600 mt-2">
-                        <MapPinIcon className="w-4 h-4 mr-1 flex-shrink-0" />
-                        <span className="truncate">{field.location.address}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col items-end space-y-2">
-                    <button
-                      onClick={() => editField(field)}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      <PencilIcon className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => setSelectedField(field)}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      <EyeIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {filteredFields.length === 0 && (
-          <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-xl">
-            <MapPinIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No se encontraron campos
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Prueba con otros términos de búsqueda o filtros.
-            </p>
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('all');
-                setTypeFilter('all');
-              }}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <FunnelIcon className="w-5 h-5 mr-2" />
-              Limpiar filtros
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Field Detail Modal */}
-      <Modal
-        isOpen={!!selectedField}
-        onClose={() => setSelectedField(null)}
-        title={selectedField?.code || 'Detalles del Campo'}
-        size="md"
-      >
-        {selectedField && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedField.status)}`}>
-                {getStatusText(selectedField.status)}
-              </div>
-              <button
-                onClick={() => handleChangeStatus(selectedField.id, 
-                  selectedField.status === 'available' ? 'reserved' : 'available'
-                )}
-                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-              >
-                {selectedField.status === 'available' ? 'Reservar' : 'Liberar'}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-medium text-gray-700">Código</p>
-                <p className="text-lg font-bold text-gray-900">{selectedField.code}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Tipo</p>
-                <p className="text-lg text-gray-900 capitalize">{getTypeText(selectedField.type)}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Capacidad</p>
-                <p className="text-lg text-gray-900">{selectedField.capacity} personas</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Prioridad</p>
-                <p className="text-lg text-gray-900">{selectedField.priority}/10</p>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-1">Ubicación</p>
-              <p className="text-gray-900">{selectedField.location.address}</p>
-              <p className="text-sm text-gray-600">{selectedField.location.city}</p>
-            </div>
-
-            {selectedField.facilities && selectedField.facilities.length > 0 && (
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-1">Instalaciones</p>
-                <div className="flex flex-wrap gap-2">
-                  {selectedField.facilities.map((facility, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm"
-                    >
-                      {facility}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {selectedField.notes && (
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-1">Notas</p>
-                <p className="text-gray-900 text-sm">{selectedField.notes}</p>
-              </div>
-            )}
-
-            <div className="flex space-x-3 pt-4">
-              <button
-                onClick={() => setSelectedField(null)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={() => handleChangeStatus(selectedField.id, 
-                  selectedField.status === 'available' ? 'maintenance' : 'available'
-                )}
-                className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
-              >
-                {selectedField.status === 'available' ? 'Enviar a Mantenimiento' : 'Activar'}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Create/Edit Field Modal */}
-      <Modal
-        isOpen={showCreateModal}
-        onClose={() => {
-          setShowCreateModal(false);
-          resetForm();
-        }}
-        title={editingField ? 'Editar Campo' : 'Crear Nuevo Campo'}
-        size="full"
-      >
-        <div className="space-y-4 px-4 pb-20">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Código del Campo *
-              </label>
-              <input
-                type="text"
-                value={newField.code}
-                onChange={(e) => setNewField({ ...newField, code: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                placeholder="Ej: CAMPO 1"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nombre del Campo *
-              </label>
-              <input
-                type="text"
-                value={newField.name}
-                onChange={(e) => setNewField({ ...newField, name: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                placeholder="Ej: Campo Principal"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tipo de Superficie *
-              </label>
-              <select
-                value={newField.type}
-                onChange={(e) => setNewField({ ...newField, type: e.target.value as Field['type'] })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                required
-              >
-                <option value="césped">Césped natural</option>
-                <option value="sintético">Césped sintético</option>
-                <option value="arena">Arena</option>
-                <option value="otros">Otros</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Capacidad de Espectadores *
-              </label>
-              <input
-                type="number"
-                value={newField.capacity}
-                onChange={(e) => setNewField({ ...newField, capacity: parseInt(e.target.value) || 100 })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                min="1"
-                max="10000"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Dirección *
-            </label>
-            <input
-              type="text"
-              value={newField.location.address}
-              onChange={(e) => setNewField({
-                ...newField,
-                location: { ...newField.location, address: e.target.value }
-              })}
-              className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              placeholder="Ej: Sede Cuemanco Isla 5, Top Row"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ciudad *
-              </label>
-              <input
-                type="text"
-                value={newField.location.city}
-                onChange={(e) => setNewField({
-                  ...newField,
-                  location: { ...newField.location, city: e.target.value }
-                })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                placeholder="Ciudad de México"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Prioridad (1-10)
-              </label>
-              <input
-                type="number"
-                value={newField.priority}
-                onChange={(e) => setNewField({ ...newField, priority: parseInt(e.target.value) || 1 })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                min="1"
-                max="10"
-              />
-            </div>
-          </div>
-
-          {/* Facilities */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Instalaciones y Servicios
-              </label>
-              <button
-                type="button"
-                onClick={addFacility}
-                className="text-sm text-blue-600 hover:text-blue-700"
-              >
-                + Agregar Instalación
-              </button>
-            </div>
-            <div className="space-y-2">
-              {newField.facilities.map((facility, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={facility}
-                    onChange={(e) => updateFacility(index, e.target.value)}
-                    className="flex-1 px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    placeholder="Ej: iluminación, vestuarios, gradas, etc."
-                  />
-                  {newField.facilities.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeFacility(index)}
-                      className="p-3 text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Estado Inicial
-            </label>
-            <select
-              value={newField.status}
-              onChange={(e) => setNewField({ ...newField, status: e.target.value as Field['status'] })}
-              className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            >
-              <option value="available">Disponible</option>
-              <option value="maintenance">En mantenimiento</option>
-              <option value="reserved">Reservado</option>
-              <option value="unavailable">No disponible</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notas Adicionales
-            </label>
-            <textarea
-              value={newField.notes}
-              onChange={(e) => setNewField({ ...newField, notes: e.target.value })}
-              className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              rows={3}
-              placeholder="Observaciones especiales sobre el campo..."
-            />
-          </div>
-
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={newField.isActive}
-              onChange={(e) => setNewField({ ...newField, isActive: e.target.checked })}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
-              Activar este campo inmediatamente
-            </label>
-          </div>
-
-          <div className="flex space-x-3 pt-6 pb-4">
-            <button
-              onClick={() => {
-                setShowCreateModal(false);
-                resetForm();
-              }}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={editingField ? handleUpdateField : handleCreateField}
-              disabled={!newField.code || !newField.name || !newField.location.address || !newField.location.city}
-              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {editingField ? 'Actualizar Campo' : 'Crear Campo'}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 };
