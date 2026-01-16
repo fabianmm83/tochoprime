@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reglas para partidos
+    match /matches/{matchId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.token.role in ['admin', 'organizer'];
+      allow update: if request.auth != null && 
+        request.auth.token.role in ['admin', 'organizer'];
+      allow delete: if request.auth != null && 
+        request.auth.token.role == 'admin';
+    }
+    
+    // Reglas para árbitros
+    match /referees/{refereeId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.token.role in ['admin', 'organizer'];
+      allow update: if request.auth != null && 
+        request.auth.token.role in ['admin', 'organizer'];
+      allow delete: if request.auth != null && 
+        request.auth.token.role == 'admin';
+    }
+    
+    // Reglas para eventos de calendario
+    match /calendarEvents/{eventId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.token.role in ['admin', 'organizer'];
+      allow update: if request.auth != null && 
+        request.auth.token.role in ['admin', 'organizer'];
+      allow delete: if request.auth != null && 
+        request.auth.token.role in ['admin', 'organizer'];
+    }
+    
+    // Reglas existentes para otras colecciones...
+  }
+}

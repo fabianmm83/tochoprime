@@ -1,0 +1,50 @@
+{
+  "name": "tochoprime",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && firebase deploy",
+    "deploy:hosting": "npm run clean && npm run build && firebase deploy --only hosting --force",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:firestore": "firebase deploy --only firestore",
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "emulators": "firebase emulators:start",
+    "emulators:start": "firebase emulators:start --only auth,firestore,functions,hosting",
+    "clean": "rm -rf dist",
+    "clean:all": "rm -rf dist .firebase firebase-debug.log",
+    "deploy:force": "npm run clean && npm run build && firebase deploy --only hosting --force"
+  },
+  "dependencies": {
+    "@fullcalendar/daygrid": "^6.1.20",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/list": "^6.1.20",
+    "@fullcalendar/react": "^6.1.20",
+    "@fullcalendar/timegrid": "^6.1.20",
+    "@heroicons/react": "^2.2.0",
+    "@tanstack/react-query": "^5.17.0",
+    "date-fns": "^3.6.0",
+    "firebase": "^10.11.1",
+    "lucide-react": "^0.562.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.71.0",
+    "react-router-dom": "^6.22.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@hookform/resolvers": "^3.10.0",
+    "@types/fullcalendar": "^3.8.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0"
+  }
+}
