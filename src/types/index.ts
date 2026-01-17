@@ -87,6 +87,34 @@ export interface Field {
   updatedAt: Date | string;
 }
 
+// Tipo extendido para campos con información detallada
+export interface FieldDetail extends Field {
+  schedule?: FieldSchedule[];
+  currentBookings?: BookingSlot[];
+  equipmentAvailable?: string[];
+  restrictions?: string[];
+  photos?: string[];
+  lastMaintenance?: string | Date;
+  nextMaintenance?: string | Date;
+}
+
+export interface FieldSchedule {
+  day: string;
+  openingTime: string;
+  closingTime: string;
+  availableForMatches: boolean;
+  maxMatchesPerDay: number;
+}
+
+export interface BookingSlot {
+  matchId?: string;
+  eventId?: string;
+  startTime: string;
+  endTime: string;
+  status: 'available' | 'booked' | 'maintenance' | 'reserved';
+  bookedBy?: string;
+}
+
 export interface Team {
   id: string;
   categoryId: string;
@@ -98,6 +126,7 @@ export interface Team {
   secondaryColor?: string;
   logoUrl?: string;
   captainId?: string;
+  viceCaptainId?: string;
   coach?: {
     name: string;
     phone: string;
@@ -117,6 +146,19 @@ export interface Team {
     goalsAgainst: number;
     points: number;
   };
+  leadershipRules?: {
+    minAge?: number;
+    minTeamTenure?: number;
+    requireActiveStatus: boolean;
+    allowConcurrentRoles: boolean;
+    maxCaptainTransfers?: number;
+  };
+  leadershipStats?: {
+    captainChanges: number;
+    viceCaptainChanges: number;
+    lastCaptainChange?: string | Date;
+    lastViceCaptainChange?: string | Date;
+  };
   createdAt: Date | string;
   updatedAt: Date | string;
   createdBy: string;
@@ -129,7 +171,9 @@ export interface Player {
   lastName: string;
   dateOfBirth?: Date | string;
   number: number;
-  position: 'portero' | 'defensa' | 'mediocampista' | 'delantero' | 'utility';
+  // ✅ Cambiar posiciones para tocho
+  position: 'quarterback' | 'runningback' | 'wide_receiver' | 'tight_end' | 'offensive_line' | 
+            'defensive_line' | 'linebacker' | 'cornerback' | 'safety' | 'kicker' | 'punter' | 'utility';
   email: string;
   phone: string;
   emergencyContact?: {
@@ -148,21 +192,80 @@ export interface Player {
     conditions?: string;
     insurance?: string;
   };
+  // ✅ Cambiar estadísticas para tocho
   stats?: {
     matchesPlayed: number;
-    goals: number;
-    assists: number;
-    yellowCards: number;
-    redCards: number;
-    cleanSheets?: number; // para porteros
+    touchdowns: number;
+    passingTouchdowns: number;
+    interceptions: number;
+    safeties: number;
+    tackles: number;
+    penalties: number;
+    yards?: number; // opcional para futuras mejoras
   };
   isCaptain: boolean;
   isViceCaptain: boolean;
+  leadershipHistory?: LeadershipRole[];
+  leadershipScore?: number;
+  captainSince?: string | Date;
+  viceCaptainSince?: string | Date;
+  eligibility?: {
+    canBeCaptain: boolean;
+    canBeViceCaptain: boolean;
+    reasons: string[];
+    score: number;
+  };
   createdAt: Date | string;
   updatedAt: Date | string;
 }
 
-// TIPO MATCH ACTUALIZADO
+// Tipo para historial de liderazgo
+export interface LeadershipRole {
+  id: string;
+  playerId: string;
+  teamId: string;
+  role: 'captain' | 'vice_captain';
+  startDate: string | Date;
+  endDate?: string | Date;
+  assignedBy: string;
+  reason?: string;
+  notes?: string;
+}
+
+// Tipo para permisos de liderazgo
+export interface LeadershipPermission {
+  playerId: string;
+  teamId: string;
+  role: 'captain' | 'vice_captain';
+  permissions: {
+    canManageTeam: boolean;
+    canManagePlayers: boolean;
+    canEditTeamInfo: boolean;
+    canViewFinancials: boolean;
+    canAssignLineup: boolean;
+    canCommunicateWithLeague: boolean;
+    permissions: string[];
+  };
+  grantedAt: string | Date;
+  expiresAt?: string | Date;
+}
+
+// Tipos para validaciones
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  eligibility?: PlayerEligibility;
+}
+
+export interface PlayerEligibility {
+  playerId: string;
+  canBeCaptain: boolean;
+  canBeViceCaptain: boolean;
+  reasons: string[];
+  score: number;
+}
+
 export interface Match {
   id: string;
   seasonId: string;
@@ -173,8 +276,8 @@ export interface Match {
   // Equipos
   homeTeamId: string;
   awayTeamId: string;
-  homeTeam?: Team; // Relación con equipo local
-  awayTeam?: Team; // Relación con equipo visitante
+  homeTeam?: Team;
+  awayTeam?: Team;
   
   // Información del partido
   matchDate: Date | string;
@@ -217,6 +320,11 @@ export interface Match {
   spectators?: number;
   weather?: 'sunny' | 'cloudy' | 'rainy' | 'stormy';
   
+  // Estadísticas relacionadas
+  statsSubmitted?: boolean;
+  statsSubmittedBy?: string;
+  statsSubmittedAt?: string | Date;
+  
   // Sistema
   createdAt: Date | string;
   updatedAt: Date | string;
@@ -224,7 +332,7 @@ export interface Match {
   updatedBy: string;
 }
 
-// TIPO ÁRBITRO ACTUALIZADO
+// TIPO ÁRBITRO COMPLETO
 export interface Referee {
   id: string;
   seasonId: string;
@@ -256,10 +364,51 @@ export interface Referee {
     preferredTimes: string[];
   };
   
-  // Historial
+  // Estadísticas extendidas
   matchesAssigned: number;
   matchesCompleted: number;
   rating?: number;
+  stats?: {
+    totalMatches: number;
+    completedMatches: number;
+    averageRating: number;
+    yellowCardsIssued: number;
+    redCardsIssued: number;
+    penaltiesIssued: number;
+    substitutionsRecorded: number;
+    injuriesReported: number;
+    matchesByDivision: Record<string, number>;
+    performanceScore: number;
+  };
+  
+  // Configuración personal
+  preferences?: {
+    preferredTimeSlots: string[];
+    maxMatchesPerWeek: number;
+    receiveNotifications: boolean;
+    offlineModeEnabled: boolean;
+    autoSyncData: boolean;
+  };
+  
+  // Equipamiento
+  equipment?: {
+    whistle: boolean;
+    cards: boolean;
+    stopwatch: boolean;
+    uniform: boolean;
+    communicationDevice: boolean;
+  };
+  
+  // Disponibilidad actualizada
+  availabilityDetail?: {
+    monday: { available: boolean; times: string[] };
+    tuesday: { available: boolean; times: string[] };
+    wednesday: { available: boolean; times: string[] };
+    thursday: { available: boolean; times: string[] };
+    friday: { available: boolean; times: string[] };
+    saturday: { available: boolean; times: string[] };
+    sunday: { available: boolean; times: string[] };
+  };
   
   // Documentos
   photoUrl?: string;
@@ -280,7 +429,121 @@ export interface Referee {
   createdBy: string;
 }
 
-// TIPO EVENTO DE CALENDARIO
+// Nuevos tipos para evidencia de partidos
+export interface MatchEvidence {
+  id: string;
+  matchId: string;
+  refereeId: string;
+  type: 'photo' | 'video' | 'document' | 'audio' | 'other';
+  fileName: string;
+  fileUrl: string;
+  fileSize?: number;
+  description?: string;
+  uploadDate: string | Date;
+  uploadedBy: string;
+  tags?: string[];
+  relatedEventId?: string;
+  verified: boolean;
+  verificationDate?: string | Date;
+  verifiedBy?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
+export interface MatchStats {
+  matchId: string;
+  refereeId: string;
+  
+  // Estadísticas generales PARA TOCHO
+  general: {
+    touchdowns: number[];           // [local, visitante] - TD vale 1 punto cada uno
+    passingTouchdowns: number[];    // Pases para TD
+    interceptions: number[];        // Intercepciones
+    safeties: number[];             // Safety - vale 1 punto
+    totalPoints: number[];          // Puntos totales (TDs + Safeties)
+    penalties: number[];            // Penales
+    penaltyYards: number[];         // Yardas de penal
+  };
+  
+  // Eventos detallados
+  events: {
+    touchdowns: MatchEvent[];
+    interceptions: MatchEvent[];
+    safeties: MatchEvent[];
+    penalties: MatchEvent[];
+    otherEvents: MatchEvent[];
+  };
+  
+  // Datos de jugadores PARA TOCHO
+  playerStats: {
+    playerId: string;
+    teamId: string;
+    touchdowns: number;
+    passingTouchdowns: number;
+    interceptions: number;
+    safeties: number;
+    tackles: number;
+    penalties: number;
+  }[];
+  
+  // Metadatos
+  metadata: {
+    startTime: string | Date;
+    endTime: string | Date;
+    duration: number;
+    weatherConditions?: string;
+    fieldConditions?: string;
+    attendance?: number;
+    notes?: string;
+  };
+  
+  submittedAt?: string | Date;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+// Tipo para datos offline
+export interface OfflineData {
+  id: string;
+  refereeId: string;
+  dataType: 'match' | 'evidence' | 'stats' | 'calendar' | 'field';
+  data: any;
+  syncStatus: 'pending' | 'synced' | 'error';
+  lastModified: string | Date;
+  syncAttempts: number;
+  errorMessage?: string;
+  createdAt: string | Date;
+  updatedAt?: Date | string;
+}
+
+// Tipo para gestión de partidos del árbitro
+export interface RefereeMatchManagement {
+  id?: string;
+  matchId: string;
+  refereeId: string;
+  status: 'pre_match' | 'in_progress' | 'completed' | 'reported' | 'verified';
+  preMatchChecklist: {
+    fieldInspection: boolean;
+    equipmentCheck: boolean;
+    teamRostersVerified: boolean;
+    playerIDsChecked: boolean;
+    safetyBriefing: boolean;
+  };
+  matchLog: {
+    timestamp: string;
+    action: string;
+    details?: any;
+    recordedBy: string;
+  }[];
+  evidenceIds: string[];
+  statsId?: string;
+  reportSubmitted: boolean;
+  reportDate?: string | Date;
+  verificationStatus: 'pending' | 'approved' | 'rejected' | 'needs_revision';
+  verificationNotes?: string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
 export interface CalendarEvent {
   id: string;
   type: 'match' | 'training' | 'event' | 'meeting';
@@ -302,7 +565,7 @@ export interface CalendarEvent {
   
   // Notificaciones
   notifyParticipants: boolean;
-  notificationTime?: number; // minutos antes
+  notificationTime?: number;
   
   // Sistema
   createdAt: Date | string;
@@ -472,10 +735,17 @@ export enum TeamStatus {
 }
 
 export enum PlayerPosition {
-  GOALKEEPER = 'portero',
-  DEFENDER = 'defensa',
-  MIDFIELDER = 'mediocampista',
-  FORWARD = 'delantero',
+  QUARTERBACK = 'quarterback',
+  RUNNINGBACK = 'runningback',
+  WIDE_RECEIVER = 'wide_receiver',
+  TIGHT_END = 'tight_end',
+  OFFENSIVE_LINE = 'offensive_line',
+  DEFENSIVE_LINE = 'defensive_line',
+  LINEBACKER = 'linebacker',
+  CORNERBACK = 'cornerback',
+  SAFETY = 'safety',
+  KICKER = 'kicker',
+  PUNTER = 'punter',
   UTILITY = 'utility'
 }
 
@@ -507,7 +777,7 @@ export type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 export interface NavItem {
   id: string;
   label: string;
-  icon: string; // Nombre del icono de lucide-react
+  icon: string;
   path: string;
   roles: User['role'][];
   badge?: number;
@@ -805,6 +1075,17 @@ export interface MobileAccessibility {
 // Unión de tipos para props de componentes
 export type ComponentProps<T> = React.PropsWithChildren<T>;
 
+// Tipos para reportes generados
+export interface GeneratedReport {
+  id: string;
+  matchId: string;
+  refereeId: string;
+  report: any;
+  generatedAt: string | Date;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
 // Función de utilidad para adaptar Match a MatchCardData
 export const adaptMatchToCardData = (match: Match, homeTeam?: Team, awayTeam?: Team): MatchCardData => {
   const matchDate = new Date(match.matchDate);
@@ -826,7 +1107,7 @@ export const adaptMatchToCardData = (match: Match, homeTeam?: Team, awayTeam?: T
     date: matchDate,
     time: match.matchTime,
     status: match.status,
-    fieldName: 'Campo por definir', // Esto debería venir del field
+    fieldName: 'Campo por definir',
     division: match.divisionId,
     category: match.categoryId,
     isLive: match.status === 'in_progress',
@@ -849,4 +1130,6 @@ export const adaptPlayerToMobileMember = (player: Player): MobileTeamMember => {
 };
 
 // Exportación de todos los tipos - ARCHIVO ÚNICO
-// No hay export * from './firestore' porque este archivo contiene todo
+export type {
+  // No necesitamos re-exportar porque todo está en este archivo
+};
