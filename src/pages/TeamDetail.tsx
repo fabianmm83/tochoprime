@@ -50,7 +50,7 @@ const TeamDetail: React.FC = () => {
     name: '',
     lastName: '',
     number: 1,
-    position: 'mediocampista' as Player['position'],
+    position: 'wide_receiver' as Player['position'],
     email: '',
     phone: '',
     dateOfBirth: '',
@@ -227,7 +227,7 @@ const TeamDetail: React.FC = () => {
       name: '',
       lastName: '',
       number: 1,
-      position: 'mediocampista',
+      position: 'wide_receiver',
       email: '',
       phone: '',
       dateOfBirth: '',
@@ -242,12 +242,37 @@ const TeamDetail: React.FC = () => {
 
   const getPositionColor = (position: Player['position']) => {
     switch (position) {
-      case 'portero': return 'bg-red-100 text-red-800';
-      case 'defensa': return 'bg-blue-100 text-blue-800';
-      case 'mediocampista': return 'bg-green-100 text-green-800';
-      case 'delantero': return 'bg-yellow-100 text-yellow-800';
-      case 'utility': return 'bg-purple-100 text-purple-800';
+      case 'quarterback': return 'bg-red-100 text-red-800';
+      case 'runningback': return 'bg-orange-100 text-orange-800';
+      case 'wide_receiver': return 'bg-blue-100 text-blue-800';
+      case 'tight_end': return 'bg-green-100 text-green-800';
+      case 'offensive_line': return 'bg-yellow-100 text-yellow-800';
+      case 'defensive_line': return 'bg-indigo-100 text-indigo-800';
+      case 'linebacker': return 'bg-purple-100 text-purple-800';
+      case 'cornerback': return 'bg-pink-100 text-pink-800';
+      case 'safety': return 'bg-teal-100 text-teal-800';
+      case 'kicker': return 'bg-cyan-100 text-cyan-800';
+      case 'punter': return 'bg-rose-100 text-rose-800';
+      case 'utility': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getPositionLabel = (position: Player['position']) => {
+    switch (position) {
+      case 'quarterback': return 'QB';
+      case 'runningback': return 'RB';
+      case 'wide_receiver': return 'WR';
+      case 'tight_end': return 'TE';
+      case 'offensive_line': return 'OL';
+      case 'defensive_line': return 'DL';
+      case 'linebacker': return 'LB';
+      case 'cornerback': return 'CB';
+      case 'safety': return 'S';
+      case 'kicker': return 'K';
+      case 'punter': return 'P';
+      case 'utility': return 'UTL';
+      default: return position;
     }
   };
 
@@ -431,7 +456,7 @@ const TeamDetail: React.FC = () => {
         {/* Team Statistics - Mobile Grid */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Estadísticas</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Estadísticas del Equipo</h2>
             <ChartBarIcon className="w-5 h-5 text-gray-400" />
           </div>
           
@@ -455,13 +480,13 @@ const TeamDetail: React.FC = () => {
             <div className="text-center p-3 bg-gray-50 rounded-lg col-span-2">
               <div className="flex justify-center space-x-4">
                 <div>
-                  <p className="text-lg font-bold text-gray-800">{team.stats?.goalsFor || 0}</p>
-                  <p className="text-xs text-gray-600">GF</p>
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-gray-800">{team.stats?.goalsAgainst || 0}</p>
-                  <p className="text-xs text-gray-600">GC</p>
-                </div>
+                  <p className="text-lg font-bold text-gray-800">{team.stats?.touchdowns || team.stats?.goalsFor || 0}</p>
+<p className="text-xs text-gray-600">TD</p>
+</div>
+<div>
+  <p className="text-lg font-bold text-gray-800">{team.stats?.penalties || team.stats?.goalsAgainst || 0}</p>
+  <p className="text-xs text-gray-600">Penal</p>
+</div>
               </div>
             </div>
           </div>
@@ -497,10 +522,7 @@ const TeamDetail: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-2 mt-1">
                       <span className={`px-2 py-0.5 rounded-full text-xs ${getPositionColor(player.position)}`}>
-                        {player.position === 'portero' ? 'Portero' :
-                         player.position === 'defensa' ? 'Defensa' :
-                         player.position === 'mediocampista' ? 'Mediocampista' :
-                         player.position === 'delantero' ? 'Delantero' : 'Utility'}
+                        {getPositionLabel(player.position)}
                       </span>
                       <span className={`px-2 py-0.5 rounded-full text-xs ${getPlayerStatusColor(player.status)}`}>
                         {player.status === 'active' ? 'Activo' :
@@ -568,10 +590,7 @@ const TeamDetail: React.FC = () => {
                       {player.name} {player.lastName.charAt(0)}.
                     </p>
                     <p className="text-sm text-gray-600">
-                      {player.position === 'portero' ? 'Portero' :
-                       player.position === 'defensa' ? 'Defensa' :
-                       player.position === 'mediocampista' ? 'Mediocampista' :
-                       player.position === 'delantero' ? 'Delantero' : 'Utility'}
+                      {getPositionLabel(player.position)}
                     </p>
                   </div>
                   {player.phone && (
@@ -652,10 +671,17 @@ const TeamDetail: React.FC = () => {
                 className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
-                <option value="portero">Portero</option>
-                <option value="defensa">Defensa</option>
-                <option value="mediocampista">Mediocampista</option>
-                <option value="delantero">Delantero</option>
+                <option value="quarterback">Quarterback</option>
+                <option value="runningback">Running Back</option>
+                <option value="wide_receiver">Wide Receiver</option>
+                <option value="tight_end">Tight End</option>
+                <option value="offensive_line">Offensive Line</option>
+                <option value="defensive_line">Defensive Line</option>
+                <option value="linebacker">Linebacker</option>
+                <option value="cornerback">Cornerback</option>
+                <option value="safety">Safety</option>
+                <option value="kicker">Kicker</option>
+                <option value="punter">Punter</option>
                 <option value="utility">Utility</option>
               </select>
             </div>

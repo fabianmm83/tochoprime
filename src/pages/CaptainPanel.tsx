@@ -402,7 +402,7 @@ const CaptainPanel: React.FC = () => {
                    member.status === 'injured' ? 'Lesionado' : 'Inactivo'}
                 </span>
                 <div className="text-xs text-gray-600 mt-1">
-                  {member.stats?.goals || 0} goles
+                  {member.stats?.touchdowns || 0} touchdowns
                 </div>
               </div>
             </div>
@@ -565,3 +565,4 @@ const CaptainPanel: React.FC = () => {
 };
 
 export default CaptainPanel;
+

@@ -112,7 +112,7 @@ const PlayerDashboard: React.FC = () => {
         );
         setUpcomingMatches(matchCards.slice(0, 3));
         
-        // Configurar estadísticas del jugador
+        // Configurar estadísticas del jugador para TOCHO
         const statsCards: MobileStatsCard[] = [
           {
             title: 'Partidos Jugados',
@@ -122,22 +122,22 @@ const PlayerDashboard: React.FC = () => {
             change: statsData?.matchesPlayed ? 2 : 0
           },
           {
-            title: 'Goles',
-            value: statsData?.goals || 0,
+            title: 'Touchdowns',
+            value: statsData?.touchdowns || 0,
             icon: 'Target',
             color: 'bg-green-500',
-            change: statsData?.goals ? 1 : 0
+            change: statsData?.touchdowns ? 1 : 0
           },
           {
-            title: 'Asistencias',
-            value: statsData?.assists || 0,
+            title: 'Pases para TD',
+            value: statsData?.passingTouchdowns || 0,
             icon: 'Users',
             color: 'bg-purple-500',
-            change: statsData?.assists ? 3 : 0
+            change: statsData?.passingTouchdowns ? 3 : 0
           },
           {
-            title: 'Tarjetas',
-            value: (statsData?.yellowCards || 0) + (statsData?.redCards || 0),
+            title: 'Penalidades',
+            value: statsData?.penalties || 0,
             icon: 'AlertCircle',
             color: 'bg-yellow-500',
             change: -1
@@ -175,7 +175,7 @@ const PlayerDashboard: React.FC = () => {
         ];
         setNotifications(mockNotifications);
         
-        // Configurar datos del dashboard
+        // Configurar datos del dashboard para TOCHO
         const dashboard: MobileDashboardData = {
           user: {
             id: userData.uid,
@@ -186,15 +186,16 @@ const PlayerDashboard: React.FC = () => {
             team: teamData ? {
               id: teamData.id,
               name: teamData.name,
-              position: 'Delantero',
+              position: 'wide_receiver',
               number: 10
             } : undefined,
             stats: statsData ? {
               matches: statsData.matchesPlayed,
-              goals: statsData.goals,
-              assists: statsData.assists,
-              yellowCards: statsData.yellowCards,
-              redCards: statsData.redCards,
+              touchdowns: statsData.touchdowns,
+              passingTouchdowns: statsData.passingTouchdowns,
+              interceptions: statsData.interceptions,
+              tackles: statsData.tackles,
+              penalties: statsData.penalties,
             } : undefined,
             upcomingMatches: matchCards.slice(0, 2),
             recentActivity: [
@@ -204,8 +205,8 @@ const PlayerDashboard: React.FC = () => {
                 date: new Date(Date.now() - 86400000)
               },
               {
-                type: 'goal_scored',
-                description: 'Anotaste 2 goles en el último partido',
+                type: 'touchdown_scored',
+                description: 'Anotaste 2 touchdowns en el último partido',
                 date: new Date(Date.now() - 172800000)
               }
             ]
@@ -369,12 +370,12 @@ const PlayerDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Sección 2: Estadísticas Personales */}
+      {/* Sección 2: Estadísticas Personales para TOCHO */}
       <div className="px-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
             <BarChart3 className="w-5 h-5 mr-2 text-green-500" />
-            Mis Estadísticas
+            Mis Estadísticas (Tocho)
           </h2>
           <button 
             onClick={() => navigate('/stats')}
@@ -424,9 +425,6 @@ const PlayerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Resto del componente igual... */}
-      {/* (Las secciones 3, 4, 5, 6 se mantienen igual que en el código anterior) */}
-      
       {/* Sección 3: Calendario de Partidos */}
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
@@ -555,10 +553,10 @@ const PlayerDashboard: React.FC = () => {
                       PTS
                     </th>
                     <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      GF
+                      TD
                     </th>
                     <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      GC
+                      PT
                     </th>
                   </tr>
                 </thead>
@@ -596,10 +594,10 @@ const PlayerDashboard: React.FC = () => {
                         <span className="font-bold text-gray-900">{team.points || 0}</span>
                       </td>
                       <td className="py-3 px-4 text-green-600 font-medium">
-                        {team.goalsFor || 0}
+                        {team.touchdowns || 0}
                       </td>
                       <td className="py-3 px-4 text-red-600 font-medium">
-                        {team.goalsAgainst || 0}
+                        {team.penalties || 0}
                       </td>
                     </tr>
                   ))}

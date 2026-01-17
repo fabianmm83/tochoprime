@@ -45,7 +45,7 @@ const Players: React.FC = () => {
     name: '',
     lastName: '',
     number: 1,
-    position: 'mediocampista' as Player['position'],
+    position: 'wide_receiver' as Player['position'],
     email: '',
     phone: '',
     dateOfBirth: '',
@@ -136,7 +136,7 @@ const Players: React.FC = () => {
       name: '',
       lastName: '',
       number: 1,
-      position: 'mediocampista',
+      position: 'wide_receiver',
       email: '',
       phone: '',
       dateOfBirth: '',
@@ -154,11 +154,37 @@ const Players: React.FC = () => {
 
   const getPositionColor = (position: Player['position']) => {
     switch (position) {
-      case 'portero': return 'bg-red-100 text-red-800';
-      case 'defensa': return 'bg-blue-100 text-blue-800';
-      case 'mediocampista': return 'bg-green-100 text-green-800';
-      case 'delantero': return 'bg-yellow-100 text-yellow-800';
+      case 'quarterback': return 'bg-red-100 text-red-800';
+      case 'runningback': return 'bg-orange-100 text-orange-800';
+      case 'wide_receiver': return 'bg-blue-100 text-blue-800';
+      case 'tight_end': return 'bg-green-100 text-green-800';
+      case 'offensive_line': return 'bg-yellow-100 text-yellow-800';
+      case 'defensive_line': return 'bg-indigo-100 text-indigo-800';
+      case 'linebacker': return 'bg-purple-100 text-purple-800';
+      case 'cornerback': return 'bg-pink-100 text-pink-800';
+      case 'safety': return 'bg-teal-100 text-teal-800';
+      case 'kicker': return 'bg-cyan-100 text-cyan-800';
+      case 'punter': return 'bg-rose-100 text-rose-800';
+      case 'utility': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getPositionLabel = (position: Player['position']) => {
+    switch (position) {
+      case 'quarterback': return 'Quarterback';
+      case 'runningback': return 'Running Back';
+      case 'wide_receiver': return 'Wide Receiver';
+      case 'tight_end': return 'Tight End';
+      case 'offensive_line': return 'Offensive Line';
+      case 'defensive_line': return 'Defensive Line';
+      case 'linebacker': return 'Linebacker';
+      case 'cornerback': return 'Cornerback';
+      case 'safety': return 'Safety';
+      case 'kicker': return 'Kicker';
+      case 'punter': return 'Punter';
+      case 'utility': return 'Utility';
+      default: return position;
     }
   };
 
@@ -315,31 +341,44 @@ const Players: React.FC = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Posición
+                Posición (Tocho)
               </label>
               <div className="flex flex-wrap gap-2">
-                {['all', 'portero', 'defensa', 'mediocampista', 'delantero', 'utility'].map((position) => (
+                <button
+                  onClick={() => setPositionFilter('all')}
+                  className={`px-3 py-1.5 rounded-full text-sm ${
+                    positionFilter === 'all' 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Todas
+                </button>
+                {['quarterback', 'runningback', 'wide_receiver', 'tight_end', 'utility'].map((position) => (
                   <button
                     key={position}
                     onClick={() => setPositionFilter(position)}
                     className={`px-3 py-1.5 rounded-full text-sm ${
                       positionFilter === position
-                        ? position === 'portero' ? 'bg-red-100 text-red-800' :
-                          position === 'defensa' ? 'bg-blue-100 text-blue-800' :
-                          position === 'mediocampista' ? 'bg-green-100 text-green-800' :
-                          position === 'delantero' ? 'bg-yellow-100 text-yellow-800' :
-                          position === 'utility' ? 'bg-purple-100 text-purple-800' :
-                          'bg-blue-100 text-blue-800'
+                        ? getPositionColor(position as Player['position'])
                         : 'bg-gray-100 text-gray-700'
                     }`}
                   >
-                    {position === 'all' ? 'Todas' :
-                     position === 'portero' ? 'Portero' :
-                     position === 'defensa' ? 'Defensa' :
-                     position === 'mediocampista' ? 'Mediocampista' :
-                     position === 'delantero' ? 'Delantero' : 'Utility'}
+                    {getPositionLabel(position as Player['position'])}
                   </button>
                 ))}
+                <select
+                  value={positionFilter}
+                  onChange={(e) => setPositionFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-full text-sm bg-gray-100 text-gray-700 border-none focus:ring-0"
+                >
+                  <option value="all">Otras posiciones...</option>
+                  {['offensive_line', 'defensive_line', 'linebacker', 'cornerback', 'safety', 'kicker', 'punter'].map((position) => (
+                    <option key={position} value={position}>
+                      {getPositionLabel(position as Player['position'])}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -454,10 +493,7 @@ const Players: React.FC = () => {
                       
                       <div className="flex flex-wrap gap-2 mt-2">
                         <span className={`px-2 py-1 rounded-full text-xs ${getPositionColor(player.position)}`}>
-                          {player.position === 'portero' ? 'Portero' :
-                           player.position === 'defensa' ? 'Defensa' :
-                           player.position === 'mediocampista' ? 'Mediocampista' :
-                           player.position === 'delantero' ? 'Delantero' : 'Utility'}
+                          {getPositionLabel(player.position)}
                         </span>
                         <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(player.status)}`}>
                           {player.status === 'active' ? 'Activo' :
@@ -583,11 +619,14 @@ const Players: React.FC = () => {
                 className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
-                <option value="portero">Portero</option>
-                <option value="defensa">Defensa</option>
-                <option value="mediocampista">Mediocampista</option>
-                <option value="delantero">Delantero</option>
-                <option value="utility">Utility</option>
+                <option value="quarterback">Quarterback</option>
+                <option value="runningback">Running Back</option>
+                <option value="wide_receiver">Wide Receiver</option>
+                <option value="tight_end">Tight End</option>
+                <option value="linebacker">Linebacker</option>
+                <option value="cornerback">Cornerback</option>
+                <option value="safety">Safety</option>
+                <option value="kicker">Kicker</option>
               </select>
             </div>
           </div>

@@ -137,15 +137,10 @@ export interface Team {
   status: 'pending' | 'approved' | 'rejected' | 'suspended' | 'active';
   paymentStatus: 'pending' | 'partial' | 'paid' | 'overdue';
   notes?: string;
-  stats?: {
-    matchesPlayed: number;
-    wins: number;
-    draws: number;
-    losses: number;
-    goalsFor: number;
-    goalsAgainst: number;
-    points: number;
-  };
+  
+  // ✅ CAMBIO CRÍTICO: Usar TeamStats en lugar de tipo inline
+  stats?: TeamStats;
+  
   leadershipRules?: {
     minAge?: number;
     minTeamTenure?: number;
@@ -162,6 +157,25 @@ export interface Team {
   createdAt: Date | string;
   updatedAt: Date | string;
   createdBy: string;
+}
+
+
+
+export interface TeamStats {
+  matchesPlayed: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  touchdowns?: number;
+  passingTouchdowns?: number;
+  interceptions?: number;
+  safeties?: number;
+  tackles?: number;
+  penalties?: number;
+  yards?: number;
+  goalsFor?: number;     // Mantener por compatibilidad
+  goalsAgainst?: number; // Mantener por compatibilidad
+  points: number;
 }
 
 export interface Player {
@@ -818,10 +832,9 @@ export interface MatchCardData {
 export interface MobileStatsCard {
   title: string;
   value: number | string;
-  change?: number;
-  icon: string;
+  icon: 'CalendarDays' | 'Target' | 'Users' | 'AlertCircle' | 'TrendingUp' | 'BarChart3' | 'Trophy' | 'Clock';
   color: string;
-  link?: string;
+  change?: number;
 }
 
 // Tipos para calendario móvil
@@ -919,26 +932,24 @@ export interface MobileNotification {
 export interface MobileUserProfile {
   id: string;
   name: string;
-  role: User['role'];
+  role: UserRole | 'jugador' | 'capitán' | 'árbitro';
   team?: {
     id: string;
     name: string;
-    position?: string;
-    number?: number;
+    position: string;
+    number: number;
   };
   stats?: {
     matches: number;
-    goals?: number;
-    assists?: number;
-    yellowCards?: number;
-    redCards?: number;
+    touchdowns?: number;
+    passingTouchdowns?: number;
+    interceptions?: number;
+    tackles?: number;
+    penalties?: number;
+    yards?: number;
   };
-  upcomingMatches?: MatchCardData[];
-  recentActivity?: {
-    type: string;
-    description: string;
-    date: Date | string;
-  }[];
+  upcomingMatches: MatchCardData[];
+  recentActivity: MobileActivity[];
 }
 
 // Tipos para formularios móviles
@@ -1133,3 +1144,35 @@ export const adaptPlayerToMobileMember = (player: Player): MobileTeamMember => {
 export type {
   // No necesitamos re-exportar porque todo está en este archivo
 };
+
+// ============== INTERFACES MÓVILES COMPLETAS ==============
+
+export interface MobileActivity {
+  type: 'match_participation' | 'touchdown_scored' | 'passing_touchdown' | 'interception' | 'tackle' | 'safety' | 'penalty' | 'registration' | 'award';
+  description: string;
+  date: Date | string;
+}
+
+// Asegúrate de que MobileUserProfile use MobileActivity:
+export interface MobileUserProfile {
+  id: string;
+  name: string;
+  role: UserRole | 'jugador' | 'capitán' | 'árbitro';
+  team?: {
+    id: string;
+    name: string;
+    position: string;
+    number: number;
+  };
+  stats?: {
+    matches: number;
+    touchdowns?: number;
+    passingTouchdowns?: number;
+    interceptions?: number;
+    tackles?: number;
+    penalties?: number;
+    yards?: number;
+  };
+  upcomingMatches: MatchCardData[];
+  recentActivity: MobileActivity[];  // ✅ Esto necesita MobileActivity
+}
