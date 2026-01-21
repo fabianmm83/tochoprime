@@ -11,26 +11,24 @@ const LocationsSection: React.FC = () => {
       status: 'active',
       description: 'Sede principal con 16 campos profesionales',
       features: [
-        '16 campos de césped sintético',
-        'Iluminación LED profesional',
-        'Vestuarios y regaderas',
-        'Estacionamiento seguro',
-        'Área de restaurantes'
+        '16 campos de césped natural',
+        'baños',
+        '3 Área de comida'
       ],
       mapUrl: '#',
       color: 'bg-blue-500',
-      stats: '250+ partidos/mes'
+      stats: '150+ partidos/mes'
     },
     {
       name: 'Zague',
-      status: 'coming',
-      description: 'Nueva sede con tecnología de punta',
+      status: 'active',
+      description: 'Sede con 4 campos',
       features: [
-        '8 campos de última generación',
+        '4 campos ',
+        'baños ',
         'Sistema de videomarcador',
-        'Gradas techadas',
-        'Cafetería premium',
-        'WiFi en toda la sede'
+        'Gradas',
+        'Cafetería',
       ],
       mapUrl: '#',
       color: 'bg-purple-500',
@@ -46,7 +44,7 @@ const LocationsSection: React.FC = () => {
             Nuestras Sedes
           </h2>
           <p className="text-xl text-gray-600 dark:text-gray-400">
-            Instalaciones de primer nivel para competencias profesionales
+            Instalaciones de primer nivel
           </p>
         </div>
 
@@ -108,7 +106,7 @@ const LocationsSection: React.FC = () => {
                   <div className="aspect-video bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
                     <div className="text-center">
                       <Navigation size={48} className="text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-                      <p className="text-gray-600 dark:text-gray-400">Mapa interactivo disponible</p>
+                      <p className="text-gray-600 dark:text-gray-400">Mapa interactivo No disponible</p>
                     </div>
                   </div>
                 </div>

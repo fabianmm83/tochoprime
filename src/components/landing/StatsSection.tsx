@@ -80,7 +80,7 @@ const StatsSection: React.FC = () => {
         {/* Additional stats */}
         <div className="mt-12 grid md:grid-cols-3 gap-6">
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-xl">
-            <div className="text-4xl font-bold mb-2">98%</div>
+            <div className="text-4xl font-bold mb-2">99%</div>
             <div className="text-lg font-semibold">Satisfacción</div>
             <div className="text-blue-100">De capitanes y jugadores</div>
           </div>

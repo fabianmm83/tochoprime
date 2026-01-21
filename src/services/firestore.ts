@@ -2016,7 +2016,6 @@ export const dataService = {
 };
 
 
-// Añade estas funciones al final de tu archivo firestore.ts, antes de las exportaciones de alias
 
 // Funciones específicas para PlayerDashboard
 export const getPlayerMatches = async (playerId: string): Promise<Match[]> => {

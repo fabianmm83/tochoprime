@@ -17,7 +17,7 @@ const HeroSection: React.FC = () => {
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-6">
               <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
               <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-                Temporada 2024 Abierta
+                Temporada 2026 Abierta
               </span>
             </div>
             
@@ -27,7 +27,7 @@ const HeroSection: React.FC = () => {
             </h1>
             
             <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
-              Gestiona tu equipo, sigue partidos en vivo y compite en la liga más 
+              Gestiona tu equipo, y juega en la liga más 
               competitiva con sedes en <span className="font-semibold">Cuemanco</span> y <span className="font-semibold">Zague</span>.
               Sistema profesional para jugadores, capitanes y árbitros.
             </p>
@@ -41,28 +41,21 @@ const HeroSection: React.FC = () => {
                 <ChevronRight size={20} />
               </button>
               
-              <button
-                onClick={() => navigate('/partidos')}
-                className="px-8 py-4 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white font-semibold rounded-lg hover:border-tocho-primary transition-colors flex items-center justify-center gap-2"
-              >
-                <Play size={20} />
-                Ver Partidos en Vivo
-              </button>
             </div>
             
             {/* Stats mini */}
             <div className="flex gap-8 mt-12">
               <div>
-                <div className="text-3xl font-bold text-gray-900 dark:text-white">150+</div>
+                <div className="text-3xl font-bold text-gray-900 dark:text-white">50+</div>
                 <div className="text-gray-600 dark:text-gray-400">Equipos</div>
               </div>
               <div>
-                <div className="text-3xl font-bold text-gray-900 dark:text-white">16</div>
+                <div className="text-3xl font-bold text-gray-900 dark:text-white">20</div>
                 <div className="text-gray-600 dark:text-gray-400">Campos</div>
               </div>
               <div>
                 <div className="text-3xl font-bold text-gray-900 dark:text-white">7</div>
-                <div className="text-gray-600 dark:text-gray-400">Categorías</div>
+                <div className="text-gray-600 dark:text-gray-400">Categorías (A-F)</div>
               </div>
             </div>
           </div>
@@ -75,7 +68,7 @@ const HeroSection: React.FC = () => {
                 <div className="text-center text-white p-8">
                   <div className="text-5xl mb-4">🏈</div>
                   <h3 className="text-2xl font-bold mb-2">Tocho Prime en Acción</h3>
-                  <p className="opacity-90">Partidos emocionantes en Cuemanco</p>
+                  
                 </div>
               </div>
               
@@ -96,7 +89,7 @@ const HeroSection: React.FC = () => {
                   <span className="text-2xl">🏆</span>
                 </div>
                 <div>
-                  <div className="font-bold text-gray-900 dark:text-white">Campeones 2023</div>
+                  <div className="font-bold text-gray-900 dark:text-white">Campeones 2025</div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">Tiburones Azules</div>
                 </div>
               </div>
@@ -108,8 +101,9 @@ const HeroSection: React.FC = () => {
                   <span className="text-2xl">📍</span>
                 </div>
                 <div>
-                  <div className="font-bold text-gray-900 dark:text-white">Sede Principal</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Cuemanco Isla 5</div>
+                  <div className="font-bold text-gray-900 dark:text-white">Sedes</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Cuemanco Isla </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Zague </div>
                 </div>
               </div>
             </div>

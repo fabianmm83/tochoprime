@@ -70,12 +70,12 @@ const LandingPage: React.FC = () => {
                 />
                 <div>
                   <h3 className="text-xl font-bold">TOCHOPRIME</h3>
-                  <p className="text-sm text-gray-400">Liga Profesional</p>
+                  <p className="text-sm text-gray-400">Liga Profesional de Tocho</p>
                 </div>
               </div>
               <p className="text-gray-400 text-sm">
                 La liga más competitiva de tocho flag en México. 
-                Gestión profesional desde 2023.
+                Gestión profesional desde 2026
               </p>
             </div>
 
@@ -84,11 +84,11 @@ const LandingPage: React.FC = () => {
               <ul className="space-y-2">
                 <li className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
                   <MapPin size={16} />
-                  <span>Cuemanco Isla 5</span>
+                  <span>Cuemanco Isla</span>
                 </li>
                 <li className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
                   <MapPin size={16} />
-                  <span>Zague (Próximamente)</span>
+                  <span>Zague </span>
                 </li>
               </ul>
             </div>
@@ -113,8 +113,7 @@ const LandingPage: React.FC = () => {
           </div>
 
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500 text-sm">
-            <p>© 2024 Tocho Prime. Todos los derechos reservados.</p>
-            <p className="mt-1">Desarrollado con ❤️ para la comunidad del tocho flag</p>
+            <p>© 2025 ToroTech. Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>

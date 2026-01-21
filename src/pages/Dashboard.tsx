@@ -137,6 +137,16 @@ const Dashboard: React.FC = () => {
       etiqueta: 'Activo'
     },
 
+    {
+   titulo: 'Mi Panel de Árbitro',
+  descripcion: 'Gestiona mis partidos asignados y reportes',
+  icono: ShieldCheckIcon, // Usa un icono diferente
+  color: 'bg-amber-500',
+  ruta: '/arbitro', // ← Esta ruta es para ÁRBITROS
+  rolesPermitidos: ['arbitro'], // Solo árbitros
+  etiqueta: 'Panel'
+},
+
     // Sistema Antiguo (Compatibilidad)
     {
       titulo: 'Ligas',
@@ -267,12 +277,12 @@ const Dashboard: React.FC = () => {
     }
 
     if (rolUsuario === 'arbitro') {
-      return [
-        { icon: CalendarDaysOutline, label: 'Asignaciones', path: '/calendario', color: 'text-blue-600' },
-        { icon: DocumentTextIcon, label: 'Partidos', path: '/partidos', color: 'text-red-600' },
-        { icon: UsersOutline, label: 'Equipos', path: '/equipos', color: 'text-green-600' },
-      ];
-    }
+  return [
+    { icon: CalendarDaysOutline, label: 'Mis Partidos', path: '/arbitro', color: 'text-blue-600' },
+    { icon: DocumentTextIcon, label: 'Asignaciones', path: '/arbitro', color: 'text-red-600' },
+    { icon: ShieldCheckIcon, label: 'Panel Árbitro', path: '/arbitro', color: 'text-amber-600' },
+  ];
+}
 
     return baseItems;
   };

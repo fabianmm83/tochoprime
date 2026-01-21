@@ -348,7 +348,7 @@ const CTASection: React.FC = () => {
             <div className="bg-gradient-to-r from-tocho-primary to-blue-600 rounded-2xl p-8 text-white">
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center">
-                  <div className="text-3xl font-bold">24h</div>
+                  <div className="text-3xl font-bold">48h</div>
                   <div className="text-sm opacity-90">Respuesta máxima</div>
                 </div>
                 <div className="text-center">
@@ -374,7 +374,7 @@ const CTASection: React.FC = () => {
           <div className="inline-flex items-center gap-4 bg-gray-800 rounded-full px-8 py-4">
             <Shield size={24} className="text-green-400" />
             <span className="text-white font-semibold">
-              Garantía de satisfacción 100% o te devolvemos tu dinero
+              Únete a Tocho Prime
             </span>
             <CheckCircle size={24} className="text-green-400" />
           </div>

@@ -190,8 +190,8 @@ const Login: React.FC = () => {
       {/* Footer */}
       <footer className="py-6 text-center text-gray-500 text-sm border-t border-gray-200 dark:border-gray-800">
         <div className="max-w-7xl mx-auto px-4">
-          <p>© 2024 Tocho Prime. Liga Profesional de Tocho Flag.</p>
-          <p className="mt-1">Sedes: Cuemanco Isla 5 • Zague (Próximamente)</p>
+          <p>© 2025 Tocho Prime. Liga Profesional de Tocho Flag.</p>
+          <p className="mt-1">Sedes: Cuemanco Isla 5 • Zague</p>
           <div className="flex justify-center gap-6 mt-4">
             <button 
               onClick={() => navigate('/campos')}

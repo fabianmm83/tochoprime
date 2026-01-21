@@ -198,7 +198,7 @@ const FeaturesSection: React.FC = () => {
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-3xl p-8 mb-12">
           <div className="text-center mb-10">
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-              ¿Por qué elegir Tocho Prime?
+              ¿Por qué elegir ToroTech?
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
               La plataforma más completa para gestión deportiva
@@ -280,7 +280,7 @@ const FeaturesSection: React.FC = () => {
           </div>
           
           <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
-            No necesitas múltiples herramientas. Tocho Prime integra todo lo necesario 
+            No necesitas múltiples herramientas. En ToroTech integra todo lo necesario 
             para gestionar tu liga de manera profesional y eficiente.
           </p>
 
