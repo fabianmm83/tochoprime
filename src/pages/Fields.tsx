@@ -7,10 +7,9 @@ import {
   Trophy,
   User,
   Home,
+  Wifi,
   Coffee,
   Waves,
-  Wifi,
-  Anchor,
   Calendar,
   Clock,
   Users,
@@ -50,7 +49,7 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     capacity: 14, 
     facilities: ['iluminación', 'vestuarios'], 
     location: { address: 'Isla 5 - Zona Central', city: 'Ciudad Deportiva' }, 
-    status: 'reserved', // Cambiado de 'occupied' a 'reserved'
+    status: 'reserved',
     priority: 1, 
     isActive: true 
   },
@@ -105,7 +104,7 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     capacity: 14, 
     facilities: ['iluminación', 'estacionamiento'], 
     location: { address: 'Isla 5 - Entrada', city: 'Ciudad Deportiva' }, 
-    status: 'reserved', // Cambiado de 'occupied' a 'reserved'
+    status: 'reserved',
     priority: 3, 
     isActive: true 
   },
@@ -138,7 +137,7 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     capacity: 14, 
     facilities: ['iluminación', 'baños'], 
     location: { address: 'Isla 5 - Zona Inferior', city: 'Ciudad Deportiva' }, 
-    status: 'reserved', // Cambiado de 'occupied' a 'reserved'
+    status: 'reserved',
     priority: 4, 
     isActive: true 
   },
@@ -239,7 +238,7 @@ const Fields: React.FC = () => {
   const getStatusColor = (status: Field['status']) => {
     switch (status) {
       case 'available': return 'bg-green-500';
-      case 'reserved': return 'bg-red-500'; // Usamos 'reserved' en lugar de 'occupied'
+      case 'reserved': return 'bg-red-500';
       case 'maintenance': return 'bg-yellow-500';
       case 'unavailable': return 'bg-gray-500';
       default: return 'bg-gray-500';
@@ -249,20 +248,10 @@ const Fields: React.FC = () => {
   const getStatusText = (status: Field['status']) => {
     switch (status) {
       case 'available': return 'Libre';
-      case 'reserved': return 'Ocupado'; // Mostramos "Ocupado" para 'reserved'
+      case 'reserved': return 'Ocupado';
       case 'maintenance': return 'Mantenimiento';
       case 'unavailable': return 'No disponible';
       default: return 'Desconocido';
-    }
-  };
-
-  const getStatusIcon = (status: Field['status']) => {
-    switch (status) {
-      case 'available': return <CheckCircle size={16} className="text-green-500" />;
-      case 'reserved': return <XCircle size={16} className="text-red-500" />;
-      case 'maintenance': return <AlertCircle size={16} className="text-yellow-500" />;
-      case 'unavailable': return <Clock size={16} className="text-gray-500" />;
-      default: return <AlertCircle size={16} className="text-gray-500" />;
     }
   };
 
@@ -284,48 +273,14 @@ const Fields: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-blue-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
-      <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <button 
-              onClick={() => navigate(-1)}
-              className="p-2 -ml-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            
-            <div className="text-center">
-              <h1 className="text-sm font-bold tracking-tight text-gray-900 dark:text-white uppercase">
-                Mapa de Sedes
-              </h1>
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
-                Sede Cuemanco Isla 5
-              </p>
-            </div>
-            
-            <button 
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: 'Mapa de Sedes - Tocho Prime',
-                    text: 'Revisa los campos disponibles en Cuemanco Isla 5',
-                    url: window.location.href,
-                  }).catch(err => {
-                    console.log('Error al compartir:', err);
-                  });
-                } else {
-                  navigator.clipboard.writeText(window.location.href).then(() => {
-                    setNotification({ type: 'success', message: 'Enlace copiado al portapapeles' });
-                  }).catch(err => {
-                    console.log('Error al copiar:', err);
-                  });
-                }
-              }}
-              className="p-2 -mr-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <Share2 size={20} />
-            </button>
-          </div>
+      <header className="pt-6 px-4 pb-3 bg-white dark:bg-gray-900 shadow-md sticky top-0 z-50">
+        <div className="flex items-baseline justify-between">
+          <h1 className="text-xl font-extrabold tracking-tighter text-blue-700 dark:text-blue-400">TOCHO PRIME</h1>
+          <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Layout de Sedes</span>
+        </div>
+        <div className="mt-2">
+          <h2 className="text-lg font-bold leading-tight">Mapa Maestro Cuemanco</h2>
+          <p className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-bold tracking-wider">Temporada Otoño 2024</p>
         </div>
       </header>
 
@@ -358,254 +313,308 @@ const Fields: React.FC = () => {
       </div>
 
       {/* Main Map Container */}
-      <main className="relative overflow-hidden bg-gradient-to-b from-blue-100 to-cyan-100 dark:from-blue-950 dark:to-cyan-900 select-none">
-        {/* Water Pattern */}
-        <div className="absolute inset-0 opacity-5 mix-blend-overlay" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2300a8ff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-        }}></div>
-
-        {/* Interactive Map */}
-        <div className="relative w-full h-[calc(100vh-180px)] max-w-[430px] mx-auto">
-          {/* Island Shape - Water Background */}
-          <div className="absolute inset-0 bg-gradient-to-b from-blue-300 to-cyan-300 dark:from-blue-800 dark:to-cyan-800 rounded-3xl m-4 shadow-2xl">
-            {/* Waves Pattern */}
-            <div className="absolute inset-0 opacity-30" style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='20' viewBox='0 0 100 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 10 C20 0, 40 20, 60 10 S80 0, 100 10 V20 H0 Z' fill='%2300a8ff' fill-opacity='0.1'/%3E%3C/svg%3E")`
-            }}></div>
+      <main className="relative flex-grow overflow-hidden min-h-[calc(100vh-180px)] bg-gradient-to-b from-blue-900 via-blue-800 to-cyan-800">
+        {/* Water Ripples */}
+        <div className="absolute w-40 h-40 top-1/4 -left-10 rounded-full bg-white/5 animate-pulse" style={{ animationDelay: '0s' }}></div>
+        <div className="absolute w-60 h-60 bottom-1/4 -right-20 rounded-full bg-white/5 animate-pulse" style={{ animationDelay: '2s' }}></div>
+        
+        {/* Lizards/Iguanas */}
+        <div className="absolute right-4 top-16 opacity-90 z-10">
+          <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center border-2 border-pink-400 shadow-md">
+            <span className="text-xs">🦎</span>
           </div>
-
-          {/* ENTRANCE AREA - Fields 7, 8, 9 */}
-          <div className="absolute top-[8%] left-[10%] w-[80%] h-[15%] bg-gradient-to-r from-green-400 to-emerald-500 dark:from-green-600 dark:to-emerald-700 rounded-2xl border-4 border-blue-900 shadow-xl flex items-center justify-around px-4">
-            {[7, 8, 9].map(num => {
-              const field = getFieldByNumber(num);
-              const fieldStatus = field?.status || 'available';
-              const isReserved = fieldStatus === 'reserved';
-              const isMaintenance = fieldStatus === 'maintenance';
-              const isUnavailable = fieldStatus === 'unavailable';
-              
-              return (
-                <button
-                  key={num}
-                  onClick={() => field && handleFieldClick(field)}
-                  className={`relative w-16 h-20 rounded-lg border-2 ${
-                    isReserved
-                      ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
-                      : isMaintenance
-                      ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
-                      : isUnavailable
-                      ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
-                      : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
-                  } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
-                >
-                  <span className="text-xl font-bold text-white">{num}</span>
-                  <span className="text-[10px] text-white font-medium mt-1">
-                    {getStatusText(fieldStatus)}
-                  </span>
-                  <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${getStatusColor(fieldStatus)}`}></div>
-                </button>
-              );
-            })}
-            
-            {/* Entrance Marker */}
-            <div className="absolute -left-6 top-1/2 -translate-y-1/2">
-              <div className="relative bg-white dark:bg-gray-800 border-2 border-blue-800 p-2 rounded-lg shadow-lg flex flex-col items-center gap-1">
-                <Anchor size={16} className="text-blue-800 dark:text-blue-400" />
-                <span className="text-[8px] font-black text-blue-800 dark:text-blue-400 uppercase">Entrada</span>
-                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white dark:bg-gray-800 border-r-2 border-b-2 border-blue-800 rotate-45"></div>
-              </div>
-            </div>
+        </div>
+        <div className="absolute left-8 bottom-32 opacity-90 z-10">
+          <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center border-2 border-pink-400 shadow-md">
+            <span className="text-base">🦎</span>
           </div>
+        </div>
 
-          {/* CENTRAL AREA - Fields 1-6 */}
-          <div className="absolute top-[25%] left-[27%] w-[62%] h-[35%] bg-gradient-to-r from-green-400 to-emerald-500 dark:from-green-600 dark:to-emerald-700 rounded-2xl border-4 border-blue-900 shadow-xl grid grid-cols-3 grid-rows-2 gap-3 p-4">
-            {[4, 5, 6, 1, 2, 3].map(num => {
-              const field = getFieldByNumber(num);
-              const fieldStatus = field?.status || 'available';
-              const isReserved = fieldStatus === 'reserved';
-              const isMaintenance = fieldStatus === 'maintenance';
-              const isUnavailable = fieldStatus === 'unavailable';
-              
-              return (
-                <button
-                  key={num}
-                  onClick={() => field && handleFieldClick(field)}
-                  className={`relative rounded-lg border-2 ${
-                    isReserved
-                      ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
-                      : isMaintenance
-                      ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
-                      : isUnavailable
-                      ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
-                      : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
-                  } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
-                >
-                  <span className="text-lg font-bold text-white">{num}</span>
-                  <span className="text-[9px] text-white font-medium">
-                    {getStatusText(fieldStatus)}
-                  </span>
-                  <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${getStatusColor(fieldStatus)}`}></div>
-                </button>
-              );
-            })}
-            
-            {/* Restrooms Icon */}
-            <div className="absolute -right-3 top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-lg border border-blue-900 flex flex-col gap-1 shadow-md">
-              <Waves size={14} className="text-blue-800 dark:text-blue-300" />
-            </div>
-          </div>
-
-          {/* LEFT SIDE AREA - Fields 13, 14 */}
-          <div className="absolute top-[32%] left-[6%] w-[16%] h-[20%] bg-gradient-to-b from-green-400 to-emerald-500 dark:from-green-600 dark:to-emerald-700 rounded-2xl border-4 border-blue-900 shadow-xl flex flex-col items-center justify-around py-3">
-            {[13, 14].map(num => {
-              const field = getFieldByNumber(num);
-              const fieldStatus = field?.status || 'available';
-              const isReserved = fieldStatus === 'reserved';
-              const isMaintenance = fieldStatus === 'maintenance';
-              const isUnavailable = fieldStatus === 'unavailable';
-              
-              return (
-                <button
-                  key={num}
-                  onClick={() => field && handleFieldClick(field)}
-                  className={`relative w-12 h-14 rounded-lg border-2 ${
-                    isReserved
-                      ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
-                      : isMaintenance
-                      ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
-                      : isUnavailable
-                      ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
-                      : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
-                  } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
-                >
-                  <span className="text-sm font-bold text-white">{num}</span>
-                  <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${getStatusColor(fieldStatus)}`}></div>
-                </button>
-              );
-            })}
-            
-            {/* Restaurant Icon */}
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-green-300 dark:bg-green-700/80 p-1.5 rounded-full border-2 border-white flex items-center justify-center shadow-lg">
-              <Coffee size={12} className="text-white" />
-            </div>
-          </div>
-
-          {/* BOTTOM AREA - Fields 10, 11, 12 */}
-          <div className="absolute bottom-[12%] left-[45%] w-[50%] h-[25%] bg-gradient-to-r from-green-400 to-emerald-500 dark:from-green-600 dark:to-emerald-700 rounded-2xl border-4 border-blue-900 shadow-xl p-4">
-            <div className="flex justify-between h-[60%] mb-3">
-              {[11, 10].map(num => {
+        {/* Map Layout */}
+        <div className="relative w-full h-full max-w-sm mx-auto px-4 pt-8 pb-12 flex flex-col">
+          {/* TOP AREA - Fields 7, 8, 9 */}
+          <div className="flex justify-center ml-16 z-20">
+            <div className="bg-emerald-600/90 p-2.5 rounded-xl border-4 border-blue-900 flex gap-2 shadow-xl">
+              {[7, 8, 9].map(num => {
                 const field = getFieldByNumber(num);
-                const fieldStatus = field?.status || 'available';
-                const isReserved = fieldStatus === 'reserved';
-                const isMaintenance = fieldStatus === 'maintenance';
-                const isUnavailable = fieldStatus === 'unavailable';
+                const status = field?.status || 'available';
+                const isReserved = status === 'reserved';
+                const isMaintenance = status === 'maintenance';
+                const isUnavailable = status === 'unavailable';
                 
                 return (
                   <button
                     key={num}
                     onClick={() => field && handleFieldClick(field)}
-                    className={`relative w-[48%] rounded-lg border-2 ${
+                    className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-20 shadow-inner transition-all hover:scale-105 active:scale-95 ${
                       isReserved
-                        ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
+                        ? 'bg-red-500'
                         : isMaintenance
-                        ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
+                        ? 'bg-yellow-500'
                         : isUnavailable
-                        ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
-                        : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
-                    } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
+                        ? 'bg-gray-500'
+                        : 'bg-green-500'
+                    }`}
                   >
-                    <span className="text-lg font-bold text-white">{num}</span>
-                    <span className="text-[9px] text-white font-medium">
-                      {getStatusText(fieldStatus)}
+                    <span className="text-xl font-extrabold text-white">{num}</span>
+                    <span className="text-[8px] font-black uppercase text-white">
+                      {getStatusText(status)}
                     </span>
-                    <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${getStatusColor(fieldStatus)}`}></div>
                   </button>
                 );
               })}
             </div>
-            
-            <div className="h-[30%]">
-              <button
-                onClick={() => {
-                  const field12 = getFieldByNumber(12);
-                  if (field12) handleFieldClick(field12);
-                }}
-                className={`relative w-full h-full rounded-lg border-2 ${
-                  getFieldByNumber(12)?.status === 'reserved'
-                    ? 'border-red-500 bg-gradient-to-b from-red-400 to-red-600' 
-                    : getFieldByNumber(12)?.status === 'maintenance'
-                    ? 'border-yellow-500 bg-gradient-to-b from-yellow-400 to-yellow-600'
-                    : getFieldByNumber(12)?.status === 'unavailable'
-                    ? 'border-gray-500 bg-gradient-to-b from-gray-400 to-gray-600'
-                    : 'border-green-500 bg-gradient-to-b from-green-400 to-green-600'
-                } flex flex-col items-center justify-center shadow-lg transition-all hover:shadow-xl active:scale-95`}
-              >
-                <span className="text-lg font-bold text-white">12</span>
-                <span className="text-[9px] text-white font-medium">
-                  {getStatusText(getFieldByNumber(12)?.status || 'available')}
-                </span>
-                <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${getStatusColor(getFieldByNumber(12)?.status || 'available')}`}></div>
-              </button>
-            </div>
-            
-            {/* Facilities Icons */}
-            <div className="absolute -right-3 top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-lg border border-blue-900 flex flex-col gap-1 shadow-md">
-              <Coffee size={14} className="text-blue-800 dark:text-blue-300" />
-              <Waves size={14} className="text-blue-800 dark:text-blue-300" />
-            </div>
-            
-            {/* WiFi Icon */}
-            <div className="absolute bottom-2 left-2 bg-green-300 dark:bg-green-700/80 p-1.5 rounded-full border-2 border-white flex items-center justify-center shadow-lg">
-              <Wifi size={12} className="text-white" />
-            </div>
           </div>
 
-          {/* Boats on Water */}
-          <div className="absolute top-[22%] left-[40%] w-6 h-3 bg-amber-900/70 rounded-sm rotate-12"></div>
-          <div className="absolute top-[22%] left-[65%] w-6 h-3 bg-amber-900/70 rounded-sm -rotate-6"></div>
-          <div className="absolute bottom-[38%] left-[58%] w-8 h-4 bg-amber-900/70 rounded-sm rotate-45"></div>
-
-          {/* Restaurant Markers */}
-          <div className="absolute top-[50%] left-[18%] bg-green-300 dark:bg-green-700/80 p-1.5 rounded-full border-2 border-white flex items-center justify-center shadow-lg">
-            <Coffee size={14} className="text-white" />
+          {/* Vertical Bridge */}
+          <div className="trajinera-path w-5 h-8 ml-[195px] -my-0.5 z-10 bg-amber-900 shadow-md">
+            <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+            <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
           </div>
-          <div className="absolute bottom-[40%] left-[43%] bg-green-300 dark:bg-green-700/80 p-1.5 rounded-full border-2 border-white flex items-center justify-center shadow-lg">
-            <Coffee size={14} className="text-white" />
+
+          {/* MAIN CONTENT AREA */}
+          <div className="flex gap-4">
+            {/* LEFT SIDE - Fields 13, 14, Soccer, 15, 16 */}
+            <div className="flex flex-col gap-4 z-20">
+              {/* Fields 13, 14 */}
+              <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 flex flex-col gap-2 shadow-lg">
+                {[13, 14].map(num => {
+                  const field = getFieldByNumber(num);
+                  const status = field?.status || 'available';
+                  const isReserved = status === 'reserved';
+                  const isMaintenance = status === 'maintenance';
+                  const isUnavailable = status === 'unavailable';
+                  
+                  return (
+                    <button
+                      key={num}
+                      onClick={() => field && handleFieldClick(field)}
+                      className={`flex items-center justify-center rounded border border-white/50 w-14 h-16 transition-all hover:scale-105 active:scale-95 ${
+                        isReserved
+                          ? 'bg-red-500'
+                          : isMaintenance
+                          ? 'bg-yellow-500'
+                          : isUnavailable
+                          ? 'bg-gray-500'
+                          : 'bg-green-500'
+                      }`}
+                    >
+                      <span className="text-lg font-extrabold text-white">{num}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Bridge */}
+              <div className="trajinera-path w-6 h-4 mx-auto -my-4 z-10 bg-amber-900 shadow-sm">
+                <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+              </div>
+
+              {/* Soccer Field */}
+              <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 shadow-lg relative">
+                <div className="flex items-center justify-center bg-green-500 rounded border border-white/50 w-14 h-28">
+                  <span className="text-xs font-black uppercase -rotate-90 tracking-tighter text-white">SOCCER</span>
+                </div>
+              </div>
+
+              {/* Bridge */}
+              <div className="trajinera-path w-6 h-4 mx-auto -my-4 z-10 bg-amber-900 shadow-sm">
+                <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+              </div>
+
+              {/* Fields 15, 16 */}
+              <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 flex flex-col gap-2 shadow-lg">
+                {[15, 16].map(num => {
+                  const field = getFieldByNumber(num);
+                  const status = field?.status || 'available';
+                  const isReserved = status === 'reserved';
+                  const isMaintenance = status === 'maintenance';
+                  const isUnavailable = status === 'unavailable';
+                  
+                  return (
+                    <button
+                      key={num}
+                      onClick={() => field && handleFieldClick(field)}
+                      className={`flex items-center justify-center rounded border border-white/50 w-14 h-12 transition-all hover:scale-105 active:scale-95 ${
+                        isReserved
+                          ? 'bg-red-500'
+                          : isMaintenance
+                          ? 'bg-yellow-500'
+                          : isUnavailable
+                          ? 'bg-gray-500'
+                          : 'bg-green-500'
+                      }`}
+                    >
+                      <span className="text-lg font-extrabold text-white">{num}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* RIGHT SIDE - Fields 1-6 and 10-12 */}
+            <div className="flex flex-col flex-grow items-end gap-0">
+              {/* Horizontal Bridge */}
+              <div className="flex items-center justify-end w-full">
+                <div className="trajinera-path h-5 w-6 mr-[-4px] z-10 mt-12 bg-amber-900 shadow-sm">
+                  <div className="w-full flex flex-col justify-around py-1">
+                    <div className="w-full h-px bg-black/20"></div>
+                    <div className="w-full h-px bg-black/20"></div>
+                  </div>
+                </div>
+                
+                {/* CENTRAL AREA - Fields 1-6 */}
+                <div className="bg-emerald-600/90 p-3.5 rounded-xl border-4 border-blue-900 grid grid-cols-3 gap-2.5 shadow-2xl relative z-20">
+                  {[4, 5, 6, 1, 2, 3].map(num => {
+                    const field = getFieldByNumber(num);
+                    const status = field?.status || 'available';
+                    const isReserved = status === 'reserved';
+                    const isMaintenance = status === 'maintenance';
+                    const isUnavailable = status === 'unavailable';
+                    
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => field && handleFieldClick(field)}
+                        className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-22 shadow-inner transition-all hover:scale-105 active:scale-95 ${
+                          isReserved
+                            ? 'bg-red-500'
+                            : isMaintenance
+                            ? 'bg-yellow-500'
+                            : isUnavailable
+                            ? 'bg-gray-500'
+                            : 'bg-green-500'
+                        }`}
+                      >
+                        <span className="text-xl font-extrabold text-white">{num}</span>
+                        <span className="text-[8px] font-black uppercase text-white">
+                          {getStatusText(status)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  
+                  {/* Facilities Icons */}
+                  <div className="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 z-30">
+                    <div className="bg-blue-600 p-1 rounded-md border border-white/30 shadow-md">
+                      <Waves size={14} className="text-white" />
+                    </div>
+                    <div className="bg-blue-600 p-1 rounded-md border border-white/30 shadow-md">
+                      <Coffee size={14} className="text-white" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vertical Bridge */}
+              <div className="trajinera-path w-5 h-8 mr-12 -my-1 z-10 bg-amber-900 shadow-md">
+                <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+                <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+              </div>
+
+              {/* BOTTOM AREA - Fields 10, 11, 12 */}
+              <div className="bg-emerald-600/90 p-3 rounded-xl border-4 border-blue-900 flex flex-col gap-2.5 shadow-xl relative z-20">
+                {/* Row with Fields 11 and 10 */}
+                <div className="flex gap-2.5">
+                  {[11, 10].map(num => {
+                    const field = getFieldByNumber(num);
+                    const status = field?.status || 'available';
+                    const isReserved = status === 'reserved';
+                    const isMaintenance = status === 'maintenance';
+                    const isUnavailable = status === 'unavailable';
+                    
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => field && handleFieldClick(field)}
+                        className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-18 shadow-inner transition-all hover:scale-105 active:scale-95 ${
+                          isReserved
+                            ? 'bg-red-500'
+                            : isMaintenance
+                            ? 'bg-yellow-500'
+                            : isUnavailable
+                            ? 'bg-gray-500'
+                            : 'bg-green-500'
+                        }`}
+                      >
+                        <span className="text-xl font-extrabold text-white">{num}</span>
+                        <span className="text-[8px] font-black uppercase text-white">
+                          {getStatusText(status)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Field 12 */}
+                <button
+                  onClick={() => {
+                    const field12 = getFieldByNumber(12);
+                    if (field12) handleFieldClick(field12);
+                  }}
+                  className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-full h-14 shadow-inner transition-all hover:scale-105 active:scale-95 ${
+                    getFieldByNumber(12)?.status === 'reserved'
+                      ? 'bg-red-500'
+                      : getFieldByNumber(12)?.status === 'maintenance'
+                      ? 'bg-yellow-500'
+                      : getFieldByNumber(12)?.status === 'unavailable'
+                      ? 'bg-gray-500'
+                      : 'bg-green-500'
+                  }`}
+                >
+                  <span className="text-xl font-extrabold text-white">12</span>
+                  <span className="text-[8px] font-black uppercase text-white">
+                    {getStatusText(getFieldByNumber(12)?.status || 'available')}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 pb-6 pt-4 px-6 z-50">
-        <div className="flex items-center justify-between max-w-md mx-auto">
-          <button 
-            onClick={() => handleNavigate('/')}
-            className="flex flex-col items-center gap-1 group"
-          >
-            <Home size={20} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Inicio</span>
-          </button>
-          
-          <button className="flex flex-col items-center gap-1">
-            <MapPin size={20} className="text-blue-600" />
-            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">Mapas</span>
-          </button>
-          
-          <button 
-            onClick={() => handleNavigate('/calendario')}
-            className="flex flex-col items-center gap-1 group"
-          >
-            <Trophy size={20} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Torneos</span>
-          </button>
-          
-          <button 
-            onClick={() => handleNavigate('/jugador')}
-            className="flex flex-col items-center gap-1 group"
-          >
-            <User size={20} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Perfil</span>
-          </button>
+      {/* Status Legend Bar */}
+      <div className="px-4 py-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex items-center justify-center gap-8 text-[11px] font-bold">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-500 border border-white/50 rounded-sm shadow-sm"></div>
+          <span className="tracking-widest text-gray-700 dark:text-gray-300">LIBRE</span>
         </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-red-500 border border-white/50 rounded-sm shadow-sm"></div>
+          <span className="tracking-widest text-gray-700 dark:text-gray-300">OCUPADO</span>
+        </div>
+      </div>
+
+      {/* Bottom Navigation */}
+      <nav className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-8 py-3 flex justify-between items-center z-50">
+        <button 
+          onClick={() => handleNavigate('/')}
+          className="flex flex-col items-center text-gray-400 hover:text-blue-600 transition-colors"
+        >
+          <Home size={20} />
+          <span className="text-[9px] font-bold uppercase mt-0.5">Inicio</span>
+        </button>
+        
+        <button className="flex flex-col items-center text-blue-600">
+          <MapPin size={20} />
+          <span className="text-[9px] font-bold uppercase mt-0.5">Mapas</span>
+        </button>
+        
+        <button 
+          onClick={() => handleNavigate('/calendario')}
+          className="flex flex-col items-center text-gray-400 hover:text-blue-600 transition-colors"
+        >
+          <Trophy size={20} />
+          <span className="text-[9px] font-bold uppercase mt-0.5">Torneos</span>
+        </button>
+        
+        <button 
+          onClick={() => handleNavigate('/jugador')}
+          className="flex flex-col items-center text-gray-400 hover:text-blue-600 transition-colors"
+        >
+          <User size={20} />
+          <span className="text-[9px] font-bold uppercase mt-0.5">Perfil</span>
+        </button>
       </nav>
 
       {/* Field Details Modal */}

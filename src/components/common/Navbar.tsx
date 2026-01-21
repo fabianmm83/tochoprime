@@ -25,7 +25,7 @@ const Navbar: React.FC = () => {
 
   const locations = [
     { name: 'Cuemanco Isla 5', address: '16 campos profesionales', status: 'Activo' },
-    { name: 'Zague', address: 'Campos de última generación', status: 'Próximamente' },
+    { name: 'Zague', address: 'Campos de última generación', status: 'Activo' },
   ];
 
   return (

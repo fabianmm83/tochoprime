@@ -108,6 +108,25 @@ const Dashboard: React.FC = () => {
       etiqueta: 'Activo'
     },
 
+    {
+  titulo: 'Mi Panel de Capitán',
+  descripcion: 'Gestiona mi equipo, jugadores y pagos',
+  icono: ShieldCheckIcon, // O usa TrophyIcon si prefieres
+  color: 'bg-emerald-500',
+  ruta: '/capitan',
+  rolesPermitidos: ['capitan'],
+  etiqueta: 'Panel'
+},
+
+    {
+  titulo: 'Panel de Administrador',
+  descripcion: 'Dashboard administrativo con estadísticas y gestión',
+  icono: ShieldCheckIcon, // O usa Cog6ToothIcon si prefieres
+  color: 'bg-purple-500',
+  ruta: '/admin',
+  rolesPermitidos: ['superadministrador', 'admin'],
+  etiqueta: 'Panel'
+},
     // Sistema de Competencia - Fase 3 ✅
     {
       titulo: 'Partidos',
@@ -144,6 +163,16 @@ const Dashboard: React.FC = () => {
   color: 'bg-amber-500',
   ruta: '/arbitro', // ← Esta ruta es para ÁRBITROS
   rolesPermitidos: ['arbitro'], // Solo árbitros
+  etiqueta: 'Panel'
+},
+
+  {
+  titulo: 'Mi Panel de Jugador',
+  descripcion: 'Panel personalizado para ver mis partidos y estadísticas',
+  icono: UserIcon,
+  color: 'bg-blue-500',
+  ruta: '/jugador',
+  rolesPermitidos: ['jugador'],
   etiqueta: 'Panel'
 },
 
@@ -253,28 +282,31 @@ const Dashboard: React.FC = () => {
     ];
 
     if (rolUsuario === 'superadministrador' || rolUsuario === 'admin') {
-      return [
-        ...baseItems,
-        { icon: ChartBarOutline, label: 'Estadísticas', path: '/estadisticas', color: 'text-purple-600' },
-        { icon: DocumentTextIcon, label: 'Reportes', path: '/reportes', color: 'text-red-600' },
-      ];
-    }
+  return [
+    { icon: ShieldCheckIcon, label: 'Panel Admin', path: '/admin', color: 'text-purple-600' },
+    { icon: CalendarDaysOutline, label: 'Calendario', path: '/calendario', color: 'text-blue-600' },
+    { icon: TrophyOutline, label: 'Equipos', path: '/equipos', color: 'text-yellow-600' },
+    { icon: ChartBarOutline, label: 'Estadísticas', path: '/estadisticas', color: 'text-purple-600' },
+    { icon: DocumentTextIcon, label: 'Reportes', path: '/reportes', color: 'text-red-600' },
+  ];
+}
 
     if (rolUsuario === 'capitan') {
-      return [
-        { icon: TrophyOutline, label: 'Mi Equipo', path: '/teams/me', color: 'text-yellow-600' },
-        { icon: CalendarDaysOutline, label: 'Calendario', path: '/calendario', color: 'text-blue-600' },
-        { icon: UsersOutline, label: 'Jugadores', path: '/jugadores', color: 'text-green-600' },
-      ];
-    }
+  return [
+    { icon: TrophyOutline, label: 'Mi Equipo', path: '/capitan', color: 'text-yellow-600' },
+    { icon: CalendarDaysOutline, label: 'Calendario', path: '/calendario', color: 'text-blue-600' },
+    { icon: UsersOutline, label: 'Jugadores', path: '/capitan', color: 'text-green-600' },
+  ];
+}
 
     if (rolUsuario === 'jugador') {
-      return [
-        { icon: CalendarDaysOutline, label: 'Mis Partidos', path: '/calendario', color: 'text-blue-600' },
-        { icon: ChartBarOutline, label: 'Estadísticas', path: '/estadisticas', color: 'text-purple-600' },
-        { icon: UsersOutline, label: 'Mi Equipo', path: '/teams/me', color: 'text-green-600' },
-      ];
-    }
+  return [
+    { icon: UserIcon, label: 'Mi Panel', path: '/jugador', color: 'text-blue-600' },
+    { icon: CalendarDaysOutline, label: 'Mis Partidos', path: '/calendario', color: 'text-blue-600' },
+    { icon: ChartBarOutline, label: 'Estadísticas', path: '/estadisticas', color: 'text-purple-600' },
+    { icon: UsersOutline, label: 'Mi Equipo', path: '/teams/me', color: 'text-green-600' },
+  ];
+}
 
     if (rolUsuario === 'arbitro') {
   return [
