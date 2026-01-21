@@ -26,6 +26,6 @@ export default defineConfig({
   base: '/',
   // ✅ Definir __APP_VERSION__ globalmente
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0')
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.1')
   }
 })
