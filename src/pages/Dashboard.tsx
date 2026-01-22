@@ -76,7 +76,7 @@ const Dashboard: React.FC = () => {
       color: 'bg-indigo-500',
       ruta: '/categorias',
       rolesPermitidos: ['superadministrador', 'admin'],
-      etiqueta: 'Activo'
+      etiqueta: 'Global'
     },
     {
       titulo: 'Campos',
@@ -159,7 +159,7 @@ const Dashboard: React.FC = () => {
     {
    titulo: 'Mi Panel de Árbitro',
   descripcion: 'Gestiona mis partidos asignados y reportes',
-  icono: ShieldCheckIcon, // Usa un icono diferente
+  icono: ShieldCheckIcon, 
   color: 'bg-amber-500',
   ruta: '/arbitro', // ← Esta ruta es para ÁRBITROS
   rolesPermitidos: ['arbitro'], // Solo árbitros

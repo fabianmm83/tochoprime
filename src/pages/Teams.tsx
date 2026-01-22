@@ -4,7 +4,8 @@ import {
   teamsService, 
   categoriesService, 
   divisionsService, 
-  seasonsService 
+  seasonsService,
+  storageService 
 } from '../services/firestore';
 import { Team, Category, Division, Season } from '../types';
 import {
@@ -23,6 +24,10 @@ import {
   MagnifyingGlassIcon,
   UserCircleIcon,
   XMarkIcon,
+  CameraIcon,
+  PhotoIcon,
+  CloudArrowUpIcon,
+  CalendarIcon
 } from '@heroicons/react/24/outline';
 import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -40,6 +45,15 @@ const Teams: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  
+  // Para el selector de temporadas y categorías
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string>('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [seasonsLoading, setSeasonsLoading] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,16 +62,15 @@ const Teams: React.FC = () => {
 
   const [newTeam, setNewTeam] = useState({
     name: '',
-    shortName: '',
     primaryColor: '#3b82f6',
     secondaryColor: '#f3f4f6',
+    logoUrl: '',
     categoryId: categoryId || '',
     seasonId: '',
     divisionId: '',
     coach: {
       name: '',
-      phone: '',
-      email: ''
+      phone: ''
     },
     status: 'pending' as Team['status'],
     paymentStatus: 'pending' as Team['paymentStatus'],
@@ -70,6 +83,11 @@ const Teams: React.FC = () => {
     } else {
       fetchAllTeams();
     }
+    
+    // Cargar temporadas para el selector
+    if (!categoryId) {
+      loadSeasons();
+    }
   }, [categoryId]);
 
   const fetchData = async (catId: string) => {
@@ -81,7 +99,7 @@ const Teams: React.FC = () => {
       
       if (!categoryData) {
         setNotification({ type: 'error', message: 'Categoría no encontrada' });
-        navigate('/categories');
+        navigate('/categorias');
         return;
       }
       
@@ -125,42 +143,181 @@ const Teams: React.FC = () => {
     }
   };
 
-  const handleCreateTeam = async () => {
-    if (!category) {
-      setNotification({ type: 'error', message: 'Selecciona una categoría primero' });
+  const loadSeasons = async () => {
+    try {
+      setSeasonsLoading(true);
+      const seasonsData = await seasonsService.getSeasons();
+      setSeasons(seasonsData);
+      
+      // Seleccionar la temporada activa o la más reciente por defecto
+      if (seasonsData.length > 0) {
+        const activeSeason = seasonsData.find(s => s.status === 'active') || seasonsData[0];
+        setSelectedSeasonId(activeSeason.id);
+        loadCategories(activeSeason.id);
+      }
+    } catch (error) {
+      console.error('Error loading seasons:', error);
+      setNotification({ type: 'error', message: 'Error al cargar las temporadas' });
+    } finally {
+      setSeasonsLoading(false);
+    }
+  };
+
+  const loadCategories = async (seasonId: string) => {
+    try {
+      setCategoriesLoading(true);
+      const categoriesData = await categoriesService.getCategoriesBySeason(seasonId);
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      setNotification({ type: 'error', message: 'Error al cargar las categorías' });
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  const handleSeasonChange = async (seasonId: string) => {
+    setSelectedSeasonId(seasonId);
+    setNewTeam({
+      ...newTeam,
+      seasonId,
+      categoryId: '', // Resetear categoría cuando cambia la temporada
+      divisionId: ''
+    });
+    await loadCategories(seasonId);
+  };
+
+  const handleCategoryChange = (categoryId: string) => {
+    const selectedCategory = categories.find(c => c.id === categoryId);
+    if (selectedCategory) {
+      setNewTeam({
+        ...newTeam,
+        categoryId,
+        divisionId: selectedCategory.divisionId,
+        seasonId: selectedCategory.seasonId
+      });
+    }
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo de archivo
+    if (!file.type.match('image.*')) {
+      setNotification({ type: 'error', message: 'Solo se permiten archivos de imagen' });
+      return;
+    }
+
+    // Validar tamaño (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setNotification({ type: 'error', message: 'La imagen no debe superar 5MB' });
       return;
     }
 
     try {
+      setUploadingLogo(true);
+      
+      // Crear preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Subir a Firebase Storage
+      const timestamp = Date.now();
+      const fileName = `team-logos/${timestamp}_${file.name}`;
+      const downloadUrl = await storageService.uploadFile(file, fileName);
+      
+      setNewTeam({ ...newTeam, logoUrl: downloadUrl });
+      setNotification({ type: 'success', message: 'Logo subido exitosamente' });
+      
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      setNotification({ type: 'error', message: 'Error al subir el logo' });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleCreateTeam = async () => {
+    // Validar que se haya seleccionado una categoría (solo cuando no hay categoryId en URL)
+    if (!categoryId && !newTeam.categoryId) {
+      setNotification({ type: 'error', message: 'Selecciona una categoría primero' });
+      return;
+    }
+
+    if (!newTeam.name.trim()) {
+      setNotification({ type: 'error', message: 'El nombre del equipo es obligatorio' });
+      return;
+    }
+
+    try {
+      // Determinar la categoría destino
+      const targetCategoryId = categoryId || newTeam.categoryId;
+      
+      if (!targetCategoryId) {
+        setNotification({ type: 'error', message: 'No se pudo determinar la categoría' });
+        return;
+      }
+
+      // Obtener información de la categoría
+      let categoryData = category;
+      if (!categoryData || categoryData.id !== targetCategoryId) {
+        categoryData = await categoriesService.getCategoryById(targetCategoryId);
+      }
+
+      if (!categoryData) {
+        setNotification({ type: 'error', message: 'Categoría no encontrada' });
+        return;
+      }
+
       const teamData = {
-        ...newTeam,
-        categoryId: category.id,
-        seasonId: category.seasonId,
-        divisionId: category.divisionId,
-        playerCount: 0,
-        registrationDate: new Date(),
+        name: newTeam.name.trim(),
+        categoryId: targetCategoryId,
+        seasonId: categoryData.seasonId,
+        divisionId: categoryData.divisionId,
         primaryColor: newTeam.primaryColor,
         secondaryColor: newTeam.secondaryColor,
-        logoUrl: '',
-        captainId: '',
-        viceCaptainId: '',
-        phone: newTeam.coach.phone,
-        email: newTeam.coach.email,
+        logoUrl: newTeam.logoUrl || '',
+        coach: newTeam.coach,
+        status: newTeam.status,
+        paymentStatus: newTeam.paymentStatus,
+        notes: newTeam.notes,
+        // Campos adicionales requeridos por la interfaz Team
+        playerCount: 0,
+        registrationDate: new Date().toISOString(),
+        stats: {
+          matchesPlayed: 0,
+          wins: 0,
+          draws: 0,
+          losses: 0,
+          goalsFor: 0,
+          goalsAgainst: 0,
+          points: 0,
+        }
       };
 
+      console.log('Creando equipo con datos:', teamData);
       await teamsService.createTeam(teamData);
       
       setNotification({ type: 'success', message: 'Equipo creado exitosamente' });
       setShowCreateModal(false);
       resetForm();
+      
+      // Refrescar datos
       if (categoryId) {
         fetchData(categoryId);
       } else {
         fetchAllTeams();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating team:', error);
-      setNotification({ type: 'error', message: 'Error al crear el equipo' });
+      setNotification({ 
+        type: 'error', 
+        message: error.message || 'Error al crear el equipo' 
+      });
     }
   };
 
@@ -214,21 +371,30 @@ const Teams: React.FC = () => {
   const resetForm = () => {
     setNewTeam({
       name: '',
-      shortName: '',
       primaryColor: '#3b82f6',
       secondaryColor: '#f3f4f6',
+      logoUrl: '',
       categoryId: categoryId || '',
       seasonId: '',
       divisionId: '',
       coach: {
         name: '',
-        phone: '',
-        email: ''
+        phone: ''
       },
       status: 'pending',
       paymentStatus: 'pending',
       notes: '',
     });
+    setLogoPreview(null);
+    
+    // Resetear selectores si no hay categoryId
+    if (!categoryId) {
+      const activeSeason = seasons.find(s => s.status === 'active') || seasons[0];
+      if (activeSeason) {
+        setSelectedSeasonId(activeSeason.id);
+        loadCategories(activeSeason.id);
+      }
+    }
   };
 
   const getStatusColor = (status: Team['status']) => {
@@ -293,9 +459,9 @@ const Teams: React.FC = () => {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">Equipos</h1>
                   <p className="text-sm text-gray-600 mt-1">
-                    {category?.name && division && (
+                    {category?.name && division && season && (
                       <span>
-                        {division.name} - Categoría {category.name}
+                        {season.name} - {division.name} - Cat. {category.name}
                       </span>
                     )}
                   </p>
@@ -351,7 +517,7 @@ const Teams: React.FC = () => {
               Filtros
             </button>
             
-            {searchTerm || statusFilter !== 'all' || paymentFilter !== 'all' ? (
+            {(searchTerm || statusFilter !== 'all' || paymentFilter !== 'all') && (
               <button
                 onClick={() => {
                   setSearchTerm('');
@@ -362,7 +528,7 @@ const Teams: React.FC = () => {
               >
                 Limpiar
               </button>
-            ) : null}
+            )}
           </div>
         </div>
 
@@ -443,11 +609,13 @@ const Teams: React.FC = () => {
       <div className="px-4 pt-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            Resultados ({filteredTeams.length})
+            Equipos ({filteredTeams.length})
           </h2>
-          <div className="text-sm text-gray-600">
-            {filteredTeams.length === teams.length ? 'Todos' : 'Filtrados'}
-          </div>
+          {filteredTeams.length !== teams.length && (
+            <div className="text-sm text-blue-600">
+              Filtrados
+            </div>
+          )}
         </div>
 
         {filteredTeams.length === 0 ? (
@@ -480,21 +648,25 @@ const Teams: React.FC = () => {
                   <div className="flex items-start space-x-4">
                     <div
                       className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: team.primaryColor || '#3b82f6' }}
+                      style={{ 
+                        backgroundColor: team.primaryColor || '#3b82f6',
+                        border: `2px solid ${team.secondaryColor || '#f3f4f6'}`
+                      }}
                     >
-                      <TrophyIcon className="w-6 h-6 text-white" />
+                      {team.logoUrl ? (
+                        <img 
+                          src={team.logoUrl} 
+                          alt={team.name}
+                          className="w-10 h-10 object-contain rounded-lg"
+                        />
+                      ) : (
+                        <TrophyIcon className="w-6 h-6 text-white" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold text-gray-900 truncate">
-                          {team.name}
-                        </h3>
-                        {team.shortName && (
-                          <span className="text-sm text-gray-500">
-                            ({team.shortName})
-                          </span>
-                        )}
-                      </div>
+                      <h3 className="font-semibold text-gray-900 truncate">
+                        {team.name}
+                      </h3>
                       
                       <div className="flex flex-wrap gap-2 mt-2">
                         <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(team.status)}`}>
@@ -514,12 +686,12 @@ const Teams: React.FC = () => {
                         {team.coach?.name && (
                           <div className="flex items-center text-sm text-gray-600">
                             <UserCircleIcon className="w-4 h-4 mr-2 flex-shrink-0" />
-                            <span className="truncate">Entrenador: {team.coach.name}</span>
+                            <span className="truncate">{team.coach.name}</span>
                           </div>
                         )}
                         <div className="flex items-center text-sm text-gray-600">
                           <UserGroupIcon className="w-4 h-4 mr-2 flex-shrink-0" />
-                          <span>Jugadores: {team.playerCount || 0}</span>
+                          <span>{team.playerCount || 0} jugadores</span>
                         </div>
                       </div>
                     </div>
@@ -549,7 +721,7 @@ const Teams: React.FC = () => {
                   </div>
                   
                   <Link
-                    to={`/teams/${team.id}`}
+                    to={`/equipos/${team.id}`}
                     className="flex items-center text-sm text-blue-600 hover:text-blue-800"
                   >
                     Ver equipo
@@ -573,35 +745,240 @@ const Teams: React.FC = () => {
         size="full"
       >
         <div className="space-y-4 px-4 pb-20">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nombre del Equipo *
+          {/* Selector de Temporada (solo mostrar si no hay categoryId en URL) */}
+          {!categoryId && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Temporada *
+                </label>
+                {seasonsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">Cargando temporadas...</span>
+                  </div>
+                ) : seasons.length === 0 ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+                    <p className="text-yellow-700">
+                      No hay temporadas disponibles. Primero crea una temporada.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setShowCreateModal(false);
+                        navigate('/temporadas');
+                      }}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Ir a Temporadas
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <select
+                      value={selectedSeasonId}
+                      onChange={(e) => handleSeasonChange(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
+                      required
+                    >
+                      {seasons.map((season) => (
+                        <option key={season.id} value={season.id}>
+                          {season.name} ({season.status === 'active' ? 'Activa' : 
+                                          season.status === 'upcoming' ? 'Próxima' : 
+                                          season.status === 'completed' ? 'Completada' : 'Archivada'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Selecciona la temporada donde competirá el equipo
+                </p>
+              </div>
+
+              {/* Selector de Categoría */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categoría *
+                </label>
+                {categoriesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">Cargando categorías...</span>
+                  </div>
+                ) : categories.length === 0 ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+                    <p className="text-yellow-700">
+                      No hay categorías disponibles para esta temporada.
+                    </p>
+                    {seasons.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-600 mb-2">
+                          Intenta con otra temporada o crea categorías primero.
+                        </p>
+                        <div className="flex flex-wrap gap-2 justify-center">
+                          {seasons.slice(0, 3).map(season => (
+                            <button
+                              key={season.id}
+                              onClick={() => handleSeasonChange(season.id)}
+                              className={`px-3 py-1.5 text-xs rounded-full ${
+                                selectedSeasonId === season.id 
+                                  ? 'bg-blue-100 text-blue-800' 
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {season.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative">
+  <TrophyIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+  <select
+    value={newTeam.categoryId}
+    onChange={(e) => handleCategoryChange(e.target.value)}
+    className="w-full pl-10 pr-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
+    required
+  >
+    <option value="">Selecciona una categoría</option>
+    {categories.map((cat) => (
+      <option key={cat.id} value={cat.id}>
+        {cat.name}
+      </option>
+    ))}
+  </select>
+</div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Selecciona la categoría donde competirá el equipo
+                </p>
+              </div>
+
+              {/* Información de la selección */}
+              {newTeam.categoryId && categories.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-start">
+                    <TrophyIcon className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-900 mb-1">
+                        Categoría seleccionada:
+                      </p>
+                      {(() => {
+                        const selectedCat = categories.find(c => c.id === newTeam.categoryId);
+                        const selectedSeason = seasons.find(s => s.id === selectedSeasonId);
+                        
+                        if (selectedCat && selectedSeason) {
+                          return (
+                            <div className="space-y-1">
+                              <p className="text-sm text-blue-700">
+                                <span className="font-medium">Temporada:</span> {selectedSeason.name}
+                              </p>
+                              <p className="text-sm text-blue-700">
+                                <span className="font-medium">Categoría:</span> {selectedCat.name}
+                              </p>
+                              {selectedCat.price && (
+                                <p className="text-sm text-blue-700">
+                                  <span className="font-medium">Precio de inscripción:</span> ${selectedCat.price.toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Nombre del Equipo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre del Equipo *
+            </label>
+            <input
+              type="text"
+              value={newTeam.name}
+              onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              placeholder="Ej: Lobos FC, Águilas Doradas, etc."
+              required
+            />
+          </div>
+
+          {/* Logo del Equipo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Logo del Equipo (Opcional)
+            </label>
+            
+            <div className="flex flex-col items-center">
+              {/* Preview del Logo */}
+              <div className="mb-4">
+                <div className="w-32 h-32 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden"
+                  style={{ 
+                    backgroundColor: newTeam.primaryColor,
+                    borderColor: newTeam.secondaryColor 
+                  }}
+                >
+                  {logoPreview ? (
+                    <img 
+                      src={logoPreview} 
+                      alt="Preview" 
+                      className="w-full h-full object-contain p-2"
+                    />
+                  ) : (
+                    <div className="text-center p-4">
+                      <CameraIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-xs text-gray-500">Sin logo</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Botón de Subida */}
+              <label className="w-full">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                  disabled={uploadingLogo}
+                />
+                <div className={`w-full px-4 py-3 rounded-xl flex items-center justify-center space-x-2 cursor-pointer transition-colors ${
+                  uploadingLogo 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                }`}>
+                  {uploadingLogo ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Subiendo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CloudArrowUpIcon className="w-5 h-5" />
+                      <span>{newTeam.logoUrl ? 'Cambiar Logo' : 'Subir Logo'}</span>
+                    </>
+                  )}
+                </div>
               </label>
-              <input
-                type="text"
-                value={newTeam.name}
-                onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                placeholder="Ej: Lobos FC"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nombre Corto
-              </label>
-              <input
-                type="text"
-                value={newTeam.shortName}
-                onChange={(e) => setNewTeam({ ...newTeam, shortName: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                placeholder="Ej: LOB"
-                maxLength={10}
-              />
+              
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                PNG, JPG o GIF • Máx. 5MB • Recomendado: 200x200px
+              </p>
             </div>
           </div>
 
+          {/* Colores del Equipo */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -614,9 +991,10 @@ const Teams: React.FC = () => {
                   onChange={(e) => setNewTeam({ ...newTeam, primaryColor: e.target.value })}
                   className="w-12 h-12 cursor-pointer rounded-lg"
                 />
-                <span className="text-sm text-gray-600">
-                  {newTeam.primaryColor}
-                </span>
+                <div className="flex-1">
+                  <span className="text-sm text-gray-600 block">{newTeam.primaryColor}</span>
+                  <span className="text-xs text-gray-500">Color principal del equipo</span>
+                </div>
               </div>
             </div>
             <div>
@@ -630,15 +1008,19 @@ const Teams: React.FC = () => {
                   onChange={(e) => setNewTeam({ ...newTeam, secondaryColor: e.target.value })}
                   className="w-12 h-12 cursor-pointer rounded-lg"
                 />
-                <span className="text-sm text-gray-600">
-                  {newTeam.secondaryColor}
-                </span>
+                <div className="flex-1">
+                  <span className="text-sm text-gray-600 block">{newTeam.secondaryColor}</span>
+                  <span className="text-xs text-gray-500">Color secundario/accesorios</span>
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Información del Entrenador (Opcional) */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Información del Entrenador</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Entrenador (Opcional)
+            </h4>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -652,7 +1034,7 @@ const Teams: React.FC = () => {
                     coach: { ...newTeam.coach, name: e.target.value }
                   })}
                   className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Nombre completo"
+                  placeholder="Nombre del entrenador"
                 />
               </div>
               <div>
@@ -670,33 +1052,20 @@ const Teams: React.FC = () => {
                   placeholder="10 dígitos"
                 />
               </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={newTeam.coach.email}
-                  onChange={(e) => setNewTeam({
-                    ...newTeam,
-                    coach: { ...newTeam.coach, email: e.target.value }
-                  })}
-                  className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="correo@ejemplo.com"
-                />
-              </div>
             </div>
           </div>
 
+          {/* Estado y Pago */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Estado Inicial
+                Estado Inicial *
               </label>
               <select
                 value={newTeam.status}
                 onChange={(e) => setNewTeam({ ...newTeam, status: e.target.value as Team['status'] })}
                 className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                required
               >
                 <option value="pending">Pendiente</option>
                 <option value="approved">Aprobado</option>
@@ -705,12 +1074,13 @@ const Teams: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Estado de Pago
+                Estado de Pago *
               </label>
               <select
                 value={newTeam.paymentStatus}
                 onChange={(e) => setNewTeam({ ...newTeam, paymentStatus: e.target.value as Team['paymentStatus'] })}
                 className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                required
               >
                 <option value="pending">Pendiente</option>
                 <option value="partial">Parcial</option>
@@ -719,19 +1089,21 @@ const Teams: React.FC = () => {
             </div>
           </div>
 
+          {/* Notas Adicionales (Opcional) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notas Adicionales
+              Notas Adicionales (Opcional)
             </label>
             <textarea
               value={newTeam.notes}
               onChange={(e) => setNewTeam({ ...newTeam, notes: e.target.value })}
               className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
               rows={3}
-              placeholder="Observaciones sobre el equipo..."
+              placeholder="Observaciones, requisitos especiales, comentarios..."
             />
           </div>
 
+          {/* Botones de Acción */}
           <div className="flex space-x-3 pt-6 pb-4">
             <button
               onClick={() => {
@@ -744,7 +1116,7 @@ const Teams: React.FC = () => {
             </button>
             <button
               onClick={handleCreateTeam}
-              disabled={!newTeam.name}
+              disabled={!newTeam.name.trim() || (!categoryId && !newTeam.categoryId)}
               className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Registrar Equipo

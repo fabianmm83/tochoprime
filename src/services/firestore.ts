@@ -11,7 +11,9 @@ import {
   orderBy,
   serverTimestamp 
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
+
+import { db, auth, storage } from './firebase';
+
 import { 
   Season, 
   Division, 
@@ -23,6 +25,33 @@ import {
   Referee,
   CalendarEvent
 } from '../types';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+
+
+// Función helper para convertir Firestore Timestamp a Date
+const parseFirestoreDate = (dateValue: any): Date | string => {
+  if (!dateValue) return new Date();
+  
+  // Si es un Timestamp de Firestore
+  if (dateValue && typeof dateValue.toDate === 'function') {
+    return dateValue.toDate();
+  }
+  
+  // Si ya es un Date
+  if (dateValue instanceof Date) {
+    return dateValue;
+  }
+  
+  // Si es un string ISO
+  if (typeof dateValue === 'string' && dateValue.includes('T')) {
+    return new Date(dateValue);
+  }
+  
+  // Devolver tal cual (string o lo que sea)
+  return dateValue;
+};
+
 
 // Servicio para Temporadas
 export const seasonsService = {
@@ -33,15 +62,18 @@ export const seasonsService = {
       const q = query(seasonsRef, orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        startDate: doc.data().startDate?.toDate() || doc.data().startDate,
-        endDate: doc.data().endDate?.toDate() || doc.data().endDate,
-        registrationDeadline: doc.data().registrationDeadline?.toDate() || doc.data().registrationDeadline,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Season[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          startDate: parseFirestoreDate(data.startDate),
+          endDate: parseFirestoreDate(data.endDate),
+          registrationDeadline: parseFirestoreDate(data.registrationDeadline),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Season;
+      });
     } catch (error) {
       console.error('Error fetching seasons:', error);
       throw error;
@@ -59,11 +91,11 @@ export const seasonsService = {
         return {
           id: seasonDoc.id,
           ...data,
-          startDate: data.startDate?.toDate() || data.startDate,
-          endDate: data.endDate?.toDate() || data.endDate,
-          registrationDeadline: data.registrationDeadline?.toDate() || data.registrationDeadline,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          startDate: parseFirestoreDate(data.startDate),
+          endDate: parseFirestoreDate(data.endDate),
+          registrationDeadline: parseFirestoreDate(data.registrationDeadline),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Season;
       }
       return null;
@@ -165,12 +197,15 @@ export const divisionsService = {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Division[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Division;
+      });
     } catch (error) {
       console.error('Error fetching divisions:', error);
       throw error;
@@ -188,8 +223,8 @@ export const divisionsService = {
         return {
           id: divisionDoc.id,
           ...data,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Division;
       }
       return null;
@@ -322,12 +357,15 @@ export const categoriesService = {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Category[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Category;
+      });
     } catch (error) {
       console.error('Error fetching categories:', error);
       throw error;
@@ -345,8 +383,8 @@ export const categoriesService = {
         return {
           id: categoryDoc.id,
           ...data,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Category;
       }
       return null;
@@ -438,12 +476,15 @@ export const categoriesService = {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Category[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Category;
+      });
     } catch (error) {
       console.error('Error fetching categories by season:', error);
       throw error;
@@ -460,12 +501,15 @@ export const fieldsService = {
       const q = query(fieldsRef, orderBy('code', 'asc'));
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Field[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Field;
+      });
     } catch (error) {
       console.error('Error fetching fields:', error);
       throw error;
@@ -483,8 +527,8 @@ export const fieldsService = {
         return {
           id: fieldDoc.id,
           ...data,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Field;
       }
       return null;
@@ -596,13 +640,16 @@ export const teamsService = {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        registrationDate: doc.data().registrationDate?.toDate() || doc.data().registrationDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Team[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          registrationDate: parseFirestoreDate(data.registrationDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Team;
+      });
     } catch (error) {
       console.error('Error fetching teams:', error);
       throw error;
@@ -620,13 +667,16 @@ export const teamsService = {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        registrationDate: doc.data().registrationDate?.toDate() || doc.data().registrationDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Team[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          registrationDate: parseFirestoreDate(data.registrationDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Team;
+      });
     } catch (error) {
       console.error('Error fetching teams by season:', error);
       throw error;
@@ -644,9 +694,9 @@ export const teamsService = {
         return {
           id: teamDoc.id,
           ...data,
-          registrationDate: data.registrationDate?.toDate() || data.registrationDate,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          registrationDate: parseFirestoreDate(data.registrationDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Team;
       }
       return null;
@@ -762,13 +812,16 @@ export const teamsService = {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        registrationDate: doc.data().registrationDate?.toDate() || doc.data().registrationDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Team[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          registrationDate: parseFirestoreDate(data.registrationDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Team;
+      });
     } catch (error) {
       console.error('Error fetching teams by division:', error);
       throw error;
@@ -782,13 +835,16 @@ export const teamsService = {
       const q = query(teamsRef, orderBy('name', 'asc'));
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        registrationDate: doc.data().registrationDate?.toDate() || doc.data().registrationDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Team[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          registrationDate: parseFirestoreDate(data.registrationDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Team;
+      });
     } catch (error) {
       console.error('Error fetching all teams:', error);
       throw error;
@@ -809,14 +865,17 @@ export const playersService = {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        dateOfBirth: doc.data().dateOfBirth?.toDate() || doc.data().dateOfBirth,
-        registrationDate: doc.data().registrationDate?.toDate() || doc.data().registrationDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Player[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          dateOfBirth: parseFirestoreDate(data.dateOfBirth),
+          registrationDate: parseFirestoreDate(data.registrationDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Player;
+      });
     } catch (error) {
       console.error('Error fetching players:', error);
       throw error;
@@ -834,10 +893,10 @@ export const playersService = {
         return {
           id: playerDoc.id,
           ...data,
-          dateOfBirth: data.dateOfBirth?.toDate() || data.dateOfBirth,
-          registrationDate: data.registrationDate?.toDate() || data.registrationDate,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          dateOfBirth: parseFirestoreDate(data.dateOfBirth),
+          registrationDate: parseFirestoreDate(data.registrationDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Player;
       }
       return null;
@@ -1028,14 +1087,17 @@ export const playersService = {
       const q = query(playersRef, orderBy('lastName', 'asc'), orderBy('name', 'asc'));
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        dateOfBirth: doc.data().dateOfBirth?.toDate() || doc.data().dateOfBirth,
-        registrationDate: doc.data().registrationDate?.toDate() || doc.data().registrationDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Player[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          dateOfBirth: parseFirestoreDate(data.dateOfBirth),
+          registrationDate: parseFirestoreDate(data.registrationDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Player;
+      });
     } catch (error) {
       console.error('Error fetching all players:', error);
       throw error;
@@ -1117,13 +1179,16 @@ export const matchesService = {
       
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        matchDate: doc.data().matchDate?.toDate() || doc.data().matchDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Match[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          matchDate: parseFirestoreDate(data.matchDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Match;
+      });
     } catch (error) {
       console.error('Error fetching matches:', error);
       throw error;
@@ -1142,13 +1207,16 @@ export const matchesService = {
       
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        matchDate: doc.data().matchDate?.toDate() || doc.data().matchDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Match[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          matchDate: parseFirestoreDate(data.matchDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Match;
+      });
     } catch (error) {
       console.error('Error fetching matches by division:', error);
       throw error;
@@ -1166,9 +1234,9 @@ export const matchesService = {
         return {
           id: matchDoc.id,
           ...data,
-          matchDate: data.matchDate?.toDate() || data.matchDate,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          matchDate: parseFirestoreDate(data.matchDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Match;
       }
       return null;
@@ -1288,22 +1356,24 @@ export const matchesService = {
       const matches: Match[] = [];
       
       snapshot1.docs.forEach(doc => {
+        const data = doc.data();
         matches.push({
           id: doc.id,
-          ...doc.data(),
-          matchDate: doc.data().matchDate?.toDate() || doc.data().matchDate,
-          createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-          updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
+          ...data,
+          matchDate: parseFirestoreDate(data.matchDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Match);
       });
       
       snapshot2.docs.forEach(doc => {
+        const data = doc.data();
         matches.push({
           id: doc.id,
-          ...doc.data(),
-          matchDate: doc.data().matchDate?.toDate() || doc.data().matchDate,
-          createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-          updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
+          ...data,
+          matchDate: parseFirestoreDate(data.matchDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Match);
       });
       
@@ -1441,13 +1511,16 @@ export const matchesService = {
       );
       
       const querySnapshot = await getDocs(q);
-      const matches = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        matchDate: doc.data().matchDate?.toDate() || doc.data().matchDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Match[];
+      const matches = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          matchDate: parseFirestoreDate(data.matchDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Match;
+      });
       
       return matches.slice(0, limit);
     } catch (error) {
@@ -1473,14 +1546,17 @@ export const refereesService = {
       
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        birthDate: doc.data().birthDate?.toDate() || doc.data().birthDate,
-        licenseExpiry: doc.data().licenseExpiry?.toDate() || doc.data().licenseExpiry,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as Referee[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          birthDate: parseFirestoreDate(data.birthDate),
+          licenseExpiry: parseFirestoreDate(data.licenseExpiry),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Referee;
+      });
     } catch (error) {
       console.error('Error fetching referees:', error);
       throw error;
@@ -1498,10 +1574,10 @@ export const refereesService = {
         return {
           id: refereeDoc.id,
           ...data,
-          birthDate: data.birthDate?.toDate() || data.birthDate,
-          licenseExpiry: data.licenseExpiry?.toDate() || data.licenseExpiry,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          birthDate: parseFirestoreDate(data.birthDate),
+          licenseExpiry: parseFirestoreDate(data.licenseExpiry),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as Referee;
       }
       return null;
@@ -1664,14 +1740,17 @@ export const calendarService = {
       );
       
       const querySnapshot = await getDocs(q);
-      let events = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        startDate: doc.data().startDate?.toDate() || doc.data().startDate,
-        endDate: doc.data().endDate?.toDate() || doc.data().endDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as CalendarEvent[];
+      let events = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          startDate: parseFirestoreDate(data.startDate),
+          endDate: parseFirestoreDate(data.endDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as CalendarEvent;
+      });
       
       // Filtrar por tipo si se especifica
       if (type) {
@@ -1696,10 +1775,10 @@ export const calendarService = {
         return {
           id: eventDoc.id,
           ...data,
-          startDate: data.startDate?.toDate() || data.startDate,
-          endDate: data.endDate?.toDate() || data.endDate,
-          createdAt: data.createdAt?.toDate() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate() || data.updatedAt,
+          startDate: parseFirestoreDate(data.startDate),
+          endDate: parseFirestoreDate(data.endDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
         } as CalendarEvent;
       }
       return null;
@@ -1816,14 +1895,17 @@ export const calendarService = {
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        startDate: doc.data().startDate?.toDate() || doc.data().startDate,
-        endDate: doc.data().endDate?.toDate() || doc.data().endDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as CalendarEvent[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          startDate: parseFirestoreDate(data.startDate),
+          endDate: parseFirestoreDate(data.endDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as CalendarEvent;
+      });
     } catch (error) {
       console.error('Error fetching events by team:', error);
       throw error;
@@ -1849,14 +1931,17 @@ export const calendarService = {
       );
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        startDate: doc.data().startDate?.toDate() || doc.data().startDate,
-        endDate: doc.data().endDate?.toDate() || doc.data().endDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as CalendarEvent[];
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          startDate: parseFirestoreDate(data.startDate),
+          endDate: parseFirestoreDate(data.endDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as CalendarEvent;
+      });
     } catch (error) {
       console.error('Error fetching events by field:', error);
       throw error;
@@ -1875,14 +1960,17 @@ export const calendarService = {
       );
       
       const querySnapshot = await getDocs(q);
-      const events = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        startDate: doc.data().startDate?.toDate() || doc.data().startDate,
-        endDate: doc.data().endDate?.toDate() || doc.data().endDate,
-        createdAt: doc.data().createdAt?.toDate() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate() || doc.data().updatedAt,
-      })) as CalendarEvent[];
+      const events = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          startDate: parseFirestoreDate(data.startDate),
+          endDate: parseFirestoreDate(data.endDate),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as CalendarEvent;
+      });
       
       return events.slice(0, limit);
     } catch (error) {
@@ -2011,10 +2099,7 @@ export const dataService = {
       throw error;
     }
   },
-
-
 };
-
 
 
 // Funciones específicas para PlayerDashboard
@@ -2030,11 +2115,11 @@ export const getPlayerMatches = async (playerId: string): Promise<Match[]> => {
     // Filtrar solo partidos futuros o en progreso
     const now = new Date();
     return teamMatches.filter(match => {
-      const matchDate = new Date(match.matchDate);
-      return matchDate >= now || match.status === 'in_progress';
+      const matchDate = parseFirestoreDate(match.matchDate);
+      return new Date(matchDate) >= now || match.status === 'in_progress';
     }).sort((a, b) => {
-      const dateA = new Date(a.matchDate).getTime();
-      const dateB = new Date(b.matchDate).getTime();
+      const dateA = new Date(parseFirestoreDate(a.matchDate)).getTime();
+      const dateB = new Date(parseFirestoreDate(b.matchDate)).getTime();
       return dateA - dateB;
     });
   } catch (error) {
@@ -2101,6 +2186,89 @@ export const getPlayerTeam = async (playerId: string): Promise<Team | null> => {
 
 
 
+// =============== SERVICIO DE STORAGE (FIREBASE STORAGE) ===============
+
+export const storageService = {
+  // Subir archivo
+  uploadFile: async (file: File, path: string): Promise<string> => {
+    try {
+      console.log('Subiendo archivo:', file.name, 'a la ruta:', path);
+      
+      // Crear referencia al Storage
+      const storageRef = ref(storage, path);
+      
+      // Subir el archivo
+      const snapshot = await uploadBytes(storageRef, file);
+      console.log('Archivo subido exitosamente:', snapshot.metadata.fullPath);
+      
+      // Obtener URL de descarga
+      const downloadUrl = await getDownloadURL(snapshot.ref);
+      console.log('URL de descarga:', downloadUrl);
+      
+      return downloadUrl;
+    } catch (error) {
+      console.error('Error subiendo archivo:', error);
+      throw new Error('Error al subir el archivo: ' + (error as Error).message);
+    }
+  },
+
+  // Subir logo de equipo
+  uploadTeamLogo: async (file: File, teamId: string): Promise<string> => {
+    try {
+      // Crear nombre único para el archivo
+      const timestamp = Date.now();
+      const extension = file.name.split('.').pop();
+      const fileName = `team-logos/${teamId}/${timestamp}.${extension}`;
+      
+      return await storageService.uploadFile(file, fileName);
+    } catch (error) {
+      console.error('Error subiendo logo del equipo:', error);
+      throw error;
+    }
+  },
+
+  // Subir imagen de perfil de jugador
+  uploadPlayerPhoto: async (file: File, playerId: string): Promise<string> => {
+    try {
+      const timestamp = Date.now();
+      const extension = file.name.split('.').pop();
+      const fileName = `player-photos/${playerId}/${timestamp}.${extension}`;
+      
+      return await storageService.uploadFile(file, fileName);
+    } catch (error) {
+      console.error('Error subiendo foto del jugador:', error);
+      throw error;
+    }
+  },
+
+  // Subir imagen de campo
+  uploadFieldImage: async (file: File, fieldId: string): Promise<string> => {
+    try {
+      const timestamp = Date.now();
+      const extension = file.name.split('.').pop();
+      const fileName = `field-images/${fieldId}/${timestamp}.${extension}`;
+      
+      return await storageService.uploadFile(file, fileName);
+    } catch (error) {
+      console.error('Error subiendo imagen de campo:', error);
+      throw error;
+    }
+  },
+
+  // Subir documentos (PDF, etc.)
+  uploadDocument: async (file: File, folder: string, documentId: string): Promise<string> => {
+    try {
+      const timestamp = Date.now();
+      const originalName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+      const fileName = `documents/${folder}/${documentId}_${timestamp}_${originalName}`;
+      
+      return await storageService.uploadFile(file, fileName);
+    } catch (error) {
+      console.error('Error subiendo documento:', error);
+      throw error;
+    }
+  }
+};
 
 
 

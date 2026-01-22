@@ -10,9 +10,8 @@ import {
   ArrowLeftIcon,
   ChevronRightIcon,
   CurrencyDollarIcon,
-  UserGroupIcon,
-  CheckCircleIcon,
-  XCircleIcon
+  HomeIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -29,6 +28,7 @@ const Categories: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const [newCategory, setNewCategory] = useState({
     name: '',
@@ -44,47 +44,66 @@ const Categories: React.FC = () => {
     if (divisionId) {
       fetchData(divisionId);
     } else {
-      navigate('/divisions');
+      navigate('/divisiones');
     }
   }, [divisionId, navigate]);
 
   const fetchData = async (divId: string) => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Obtener todas las temporadas primero para encontrar la temporada de esta división
-      const seasons = await seasonsService.getSeasons(); // CAMBIADO: getAllSeasons() por getSeasons()
+      console.log('Fetching data for division:', divId);
       
-      // Obtener divisiones de todas las temporadas
+      // 1. Obtener la división específica
       let currentDivision: Division | null = null;
       let currentSeason: Season | null = null;
       
-      for (const season of seasons) {
-        const divisions = await divisionsService.getDivisionsBySeason(season.id);
-        const foundDivision = divisions.find(d => d.id === divId);
-        
-        if (foundDivision) {
-          currentDivision = foundDivision;
-          currentSeason = season;
-          break;
+      // Primero obtenemos todas las temporadas
+      const seasons = await seasonsService.getSeasons();
+      console.log('Temporadas encontradas:', seasons.length);
+      
+      // Buscamos la división en cada temporada
+      for (const s of seasons) {
+        try {
+          const divisions = await divisionsService.getDivisionsBySeason(s.id);
+          console.log(`Divisions in season ${s.name}:`, divisions.length);
+          
+          const foundDivision = divisions.find(d => d.id === divId);
+          if (foundDivision) {
+            currentDivision = foundDivision;
+            currentSeason = s;
+            console.log('División encontrada:', foundDivision.name);
+            console.log('Temporada:', s.name);
+            break;
+          }
+        } catch (seasonError) {
+          console.error(`Error fetching divisions for season ${s.id}:`, seasonError);
         }
       }
       
       if (!currentDivision) {
+        setError('División no encontrada. Puede que haya sido eliminada o no exista.');
         setNotification({ type: 'error', message: 'División no encontrada' });
-        navigate('/divisions');
+        navigate('/divisiones');
         return;
       }
       
       setDivision(currentDivision);
       setSeason(currentSeason);
       
-      // Obtener categorías
+      // 2. Obtener categorías de la división
+      console.log('Fetching categories for division:', divId);
       const categoriesData = await categoriesService.getCategoriesByDivision(divId);
-      setCategories(categoriesData.sort((a, b) => a.level - b.level));
+      console.log('Categorías obtenidas:', categoriesData.length);
+      
+      // Ordenar por nivel (A=1, B=2, etc.)
+      const sortedCategories = categoriesData.sort((a, b) => a.level - b.level);
+      setCategories(sortedCategories);
       
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error completo en fetchData:', error);
+      setError('Error al cargar los datos. Por favor, intenta nuevamente.');
       setNotification({ type: 'error', message: 'Error al cargar los datos' });
     } finally {
       setLoading(false);
@@ -95,12 +114,26 @@ const Categories: React.FC = () => {
     if (!division || !season || !divisionId) return;
 
     try {
-      await categoriesService.createCategory({
-        ...newCategory,
+      // Validar que el nombre sea una letra única
+      if (!newCategory.name || newCategory.name.length !== 1) {
+        setNotification({ type: 'error', message: 'El nombre debe ser una letra única (A-G)' });
+        return;
+      }
+
+      const categoryData = {
         divisionId,
         seasonId: season.id,
         name: newCategory.name.toUpperCase(),
-      });
+        level: newCategory.level,
+        teamLimit: newCategory.teamLimit,
+        playerLimit: newCategory.playerLimit,
+        price: newCategory.price,
+        rules: newCategory.rules.filter(rule => rule.trim() !== ''), // Filtrar reglas vacías
+        isActive: newCategory.isActive,
+      };
+
+      console.log('Creando categoría:', categoryData);
+      await categoriesService.createCategory(categoryData);
       
       setNotification({ type: 'success', message: 'Categoría creada exitosamente' });
       setShowCreateModal(false);
@@ -117,8 +150,13 @@ const Categories: React.FC = () => {
 
     try {
       await categoriesService.updateCategory(editingCategory.id, {
-        ...newCategory,
         name: newCategory.name.toUpperCase(),
+        level: newCategory.level,
+        teamLimit: newCategory.teamLimit,
+        playerLimit: newCategory.playerLimit,
+        price: newCategory.price,
+        rules: newCategory.rules.filter(rule => rule.trim() !== ''),
+        isActive: newCategory.isActive,
       });
       
       setNotification({ type: 'success', message: 'Categoría actualizada exitosamente' });
@@ -135,12 +173,14 @@ const Categories: React.FC = () => {
     if (!division || !season || !divisionId) return;
 
     try {
+      console.log('Creando categorías predeterminadas para división:', divisionId);
       await categoriesService.createDefaultCategories(divisionId, season.id);
+      
       setNotification({ type: 'success', message: 'Categorías predeterminadas creadas exitosamente' });
       fetchData(divisionId);
     } catch (error) {
       console.error('Error creating default categories:', error);
-      setNotification({ type: 'error', message: 'Error al crear las categorías' });
+      setNotification({ type: 'error', message: 'Error al crear las categorías predeterminadas' });
     }
   };
 
@@ -177,7 +217,7 @@ const Categories: React.FC = () => {
       teamLimit: category.teamLimit,
       playerLimit: category.playerLimit,
       price: category.price,
-      rules: [...category.rules],
+      rules: category.rules && category.rules.length > 0 ? [...category.rules] : [''],
       isActive: category.isActive,
     });
     setShowEditModal(true);
@@ -211,8 +251,34 @@ const Categories: React.FC = () => {
     return colors[level - 1] || 'bg-gray-500';
   };
 
+  const getLetterFromLevel = (level: number) => {
+    const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    return letters[level - 1] || level.toString();
+  };
+
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  if (error && !division) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+            <ExclamationTriangleIcon className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900">Error al cargar</h2>
+          <p className="text-gray-600 mt-2">{error}</p>
+          <button
+            onClick={() => navigate('/divisiones')}
+            className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <ArrowLeftIcon className="w-5 h-5 mr-2" />
+            Volver a Divisiones
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!division || !divisionId) {
@@ -220,8 +286,9 @@ const Categories: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900">División no encontrada</h2>
+          <p className="text-gray-600 mt-2">La división que estás buscando no existe o ha sido eliminada.</p>
           <button
-            onClick={() => navigate('/divisions')}
+            onClick={() => navigate('/divisiones')}
             className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <ArrowLeftIcon className="w-5 h-5 mr-2" />
@@ -234,12 +301,34 @@ const Categories: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-        <div>
-          <div className="flex items-center mb-2">
+      {/* Header y Navegación */}
+      <div className="mb-8">
+        {/* Breadcrumbs */}
+        <div className="flex items-center text-sm text-gray-600 mb-4">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center hover:text-blue-600 transition-colors"
+          >
+            <HomeIcon className="w-4 h-4 mr-1" />
+            Dashboard
+          </button>
+          <ChevronRightIcon className="w-4 h-4 mx-2" />
+          <button
+            onClick={() => navigate('/divisiones')}
+            className="hover:text-blue-600 transition-colors"
+          >
+            Divisiones
+          </button>
+          <ChevronRightIcon className="w-4 h-4 mx-2" />
+          <span className="font-medium text-gray-900">{division.name}</span>
+          <ChevronRightIcon className="w-4 h-4 mx-2" />
+          <span className="font-medium text-blue-600">Categorías</span>
+        </div>
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+          <div className="flex items-center mb-4 md:mb-0">
             <button
-              onClick={() => navigate('/divisions')}
+              onClick={() => navigate('/divisiones')}
               className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <ArrowLeftIcon className="w-5 h-5" />
@@ -257,24 +346,31 @@ const Categories: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
-        
-        <div className="flex space-x-3 mt-4 md:mt-0">
-          <button
-            onClick={handleCreateDefaultCategories}
-            className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            disabled={categories.length > 0}
-          >
-            <TagIcon className="w-5 h-5 mr-2" />
-            Categorías Predeterminadas
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <PlusIcon className="w-5 h-5 mr-2" />
-            Nueva Categoría
-          </button>
+          
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => navigate('/categorias')}
+              className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <TagIcon className="w-5 h-5 mr-2" />
+              Ver Todas las Categorías
+            </button>
+            <button
+              onClick={handleCreateDefaultCategories}
+              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              disabled={categories.length > 0}
+            >
+              <TagIcon className="w-5 h-5 mr-2" />
+              Categorías Predeterminadas
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <PlusIcon className="w-5 h-5 mr-2" />
+              Nueva Categoría
+            </button>
+          </div>
         </div>
       </div>
 
@@ -285,6 +381,16 @@ const Categories: React.FC = () => {
           message={notification.message}
           onClose={() => setNotification(null)}
         />
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center">
+            <ExclamationTriangleIcon className="w-5 h-5 text-red-600 mr-2" />
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        </div>
       )}
 
       {/* Categories Grid */}
@@ -303,7 +409,7 @@ const Categories: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">Categoría {category.name}</h3>
-                    <p className="text-sm text-gray-600">Nivel {category.level}</p>
+                    <p className="text-sm text-gray-600">Nivel {category.level} ({getLetterFromLevel(category.level)})</p>
                   </div>
                 </div>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -331,7 +437,7 @@ const Categories: React.FC = () => {
                     <CurrencyDollarIcon className="w-5 h-5 text-gray-600 mr-2" />
                     <span className="text-sm font-medium text-gray-700">Precio por Equipo</span>
                   </div>
-                  <span className="text-lg font-bold text-green-600">${category.price}</span>
+                  <span className="text-lg font-bold text-green-600">${category.price.toLocaleString()}</span>
                 </div>
 
                 {category.rules && category.rules.length > 0 && (
@@ -341,7 +447,7 @@ const Categories: React.FC = () => {
                       {category.rules.slice(0, 2).map((rule, index) => (
                         <li key={index} className="flex items-start text-sm text-gray-600">
                           <span className="mr-2">•</span>
-                          <span className="line-clamp-1">{rule}</span>
+                          <span className="line-clamp-2">{rule}</span>
                         </li>
                       ))}
                       {category.rules.length > 2 && (
@@ -357,7 +463,7 @@ const Categories: React.FC = () => {
               {/* Actions */}
               <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                 <button
-                  onClick={() => navigate(`/categories/${category.id}/teams`)}
+                  onClick={() => navigate(`/equipos?category=${category.id}`)}
                   className="flex items-center text-sm text-blue-600 hover:text-blue-700"
                 >
                   Ver equipos
@@ -386,7 +492,7 @@ const Categories: React.FC = () => {
       </div>
 
       {/* Empty State */}
-      {categories.length === 0 && (
+      {categories.length === 0 && !error && (
         <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-xl">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
             <TagIcon className="w-8 h-8 text-blue-600" />
@@ -399,6 +505,7 @@ const Categories: React.FC = () => {
             <button
               onClick={handleCreateDefaultCategories}
               className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              disabled={categories.length > 0}
             >
               <TagIcon className="w-5 h-5 mr-2" />
               Crear 7 Categorías Predeterminadas (A-G)
@@ -445,16 +552,18 @@ const Categories: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Nivel *
               </label>
-              <input
-                type="number"
+              <select
                 value={newCategory.level}
                 onChange={(e) => setNewCategory({ ...newCategory, level: parseInt(e.target.value) || 1 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                min="1"
-                max="10"
                 required
-              />
-              <p className="text-xs text-gray-500 mt-1">1 = A (más alto), 7 = G (más bajo)</p>
+              >
+                {[1, 2, 3, 4, 5, 6, 7].map(level => (
+                  <option key={level} value={level}>
+                    Nivel {level} ({getLetterFromLevel(level)})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -604,15 +713,18 @@ const Categories: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nivel *
                 </label>
-                <input
-                  type="number"
+                <select
                   value={newCategory.level}
                   onChange={(e) => setNewCategory({ ...newCategory, level: parseInt(e.target.value) || 1 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  min="1"
-                  max="10"
                   required
-                />
+                >
+                  {[1, 2, 3, 4, 5, 6, 7].map(level => (
+                    <option key={level} value={level}>
+                      Nivel {level} ({getLetterFromLevel(level)})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 

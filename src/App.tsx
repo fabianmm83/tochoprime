@@ -24,6 +24,7 @@ import Seasons from './pages/Seasons';
 import SeasonDetail from './pages/SeasonDetail';
 import Divisions from './pages/Divisions';
 import Categories from './pages/Categories';
+import CategoriesDetail from './pages/CategoriesDetail';
 import Fields from './pages/Fields';
 import Teams from './pages/Teams';
 import TeamDetail from './pages/TeamDetail';
@@ -145,10 +146,29 @@ function App() {
           <Route path="/categorias" element={
             <PrivateRoute>
               <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
-                <Categories />
+                <CategoriesDetail />
               </RoleBasedRoute>
             </PrivateRoute>
           } />
+
+          
+<Route path="/categorias" element={
+  <PrivateRoute>
+    <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
+      <CategoriesDetail />  // ← Cambia Categories por CategoriesDetail
+    </RoleBasedRoute>
+  </PrivateRoute>
+} />
+
+// Y agrega una nueva ruta para categorías por división:
+<Route path="/divisiones/:divisionId/categorias" element={
+  <PrivateRoute>
+    <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
+      <Categories />  
+    </RoleBasedRoute>
+  </PrivateRoute>
+} />
+
           
           <Route path="/campos" element={
             <PrivateRoute>

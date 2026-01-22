@@ -7,10 +7,14 @@ import {
   CalendarIcon, 
   DocumentDuplicateIcon, 
   ArchiveBoxIcon,
+  ArrowUturnLeftIcon,
   EyeIcon,
   TrashIcon,
   CheckCircleIcon,
-  ClockIcon
+  ClockIcon,
+  PencilIcon,
+  ExclamationTriangleIcon,
+  HomeIcon
 } from '@heroicons/react/24/outline';
 import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -22,8 +26,10 @@ const Seasons: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState<Season | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
 
   // Form state
   const [newSeason, setNewSeason] = useState({
@@ -33,9 +39,22 @@ const Seasons: React.FC = () => {
     registrationDeadline: '',
     description: '',
     basePrice: 2000,
-    earlyBirdDiscount: 10,
     rules: [''],
   });
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (dropdownOpen) {
+        setDropdownOpen(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [dropdownOpen]);
 
   // Fetch seasons on component mount
   useEffect(() => {
@@ -45,7 +64,7 @@ const Seasons: React.FC = () => {
   const fetchSeasons = async () => {
     try {
       setLoading(true);
-      const data = await seasonsService.getSeasons(); // Cambiado de getAllSeasons() a getSeasons()
+      const data = await seasonsService.getSeasons();
       setSeasons(data);
     } catch (error) {
       console.error('Error fetching seasons:', error);
@@ -66,15 +85,11 @@ const Seasons: React.FC = () => {
         status: 'upcoming' as const,
         priceConfiguration: {
           basePrice: newSeason.basePrice,
-          earlyBirdDiscount: newSeason.earlyBirdDiscount,
-          teamDiscounts: [
-            { minTeams: 3, discountPercentage: 5 },
-            { minTeams: 5, discountPercentage: 10 },
-          ],
+          earlyBirdDiscount: 0,
+          teamDiscounts: [],
         },
         rules: newSeason.rules.filter(rule => rule.trim() !== ''),
         isActive: false,
-        createdBy: 'current-user-id', // Esto se debe obtener del contexto de auth
       };
 
       const seasonId = await seasonsService.createSeason(seasonData);
@@ -84,8 +99,7 @@ const Seasons: React.FC = () => {
       resetForm();
       fetchSeasons();
       
-      // Navegar al detalle de la temporada
-      navigate(`/seasons/${seasonId}`);
+      navigate(`/temporadas/${seasonId}`);
     } catch (error) {
       console.error('Error creating season:', error);
       setNotification({ type: 'error', message: 'Error al crear la temporada' });
@@ -104,7 +118,7 @@ const Seasons: React.FC = () => {
       setSelectedSeason(null);
       fetchSeasons();
       
-      navigate(`/seasons/${newSeasonId}`);
+      navigate(`/temporadas/${newSeasonId}`);
     } catch (error) {
       console.error('Error duplicating season:', error);
       setNotification({ type: 'error', message: 'Error al duplicar la temporada' });
@@ -112,16 +126,51 @@ const Seasons: React.FC = () => {
   };
 
   const handleArchiveSeason = async (seasonId: string) => {
-    if (window.confirm('¿Estás seguro de que deseas archivar esta temporada?')) {
-      try {
-        await seasonsService.archiveSeason(seasonId);
-        setNotification({ type: 'success', message: 'Temporada archivada exitosamente' });
-        fetchSeasons();
-      } catch (error) {
-        console.error('Error archiving season:', error);
-        setNotification({ type: 'error', message: 'Error al archivar la temporada' });
-      }
+    try {
+      await seasonsService.archiveSeason(seasonId);
+      setNotification({ type: 'success', message: 'Temporada archivada exitosamente' });
+      setDropdownOpen(null);
+      fetchSeasons();
+    } catch (error) {
+      console.error('Error archiving season:', error);
+      setNotification({ type: 'error', message: 'Error al archivar la temporada' });
     }
+  };
+
+  const handleUnarchiveSeason = async (seasonId: string) => {
+    try {
+      await seasonsService.updateSeason(seasonId, {
+        status: 'completed',
+        updatedAt: new Date(),
+      });
+      setNotification({ type: 'success', message: 'Temporada desarchivada exitosamente' });
+      setDropdownOpen(null);
+      fetchSeasons();
+    } catch (error) {
+      console.error('Error unarchiving season:', error);
+      setNotification({ type: 'error', message: 'Error al desarchivar la temporada' });
+    }
+  };
+
+  const handleDeleteSeason = async () => {
+    if (!selectedSeason) return;
+
+    try {
+      await seasonsService.deleteSeason(selectedSeason.id);
+      
+      setNotification({ type: 'success', message: 'Temporada eliminada exitosamente' });
+      setShowDeleteModal(false);
+      setSelectedSeason(null);
+      fetchSeasons();
+      
+    } catch (error) {
+      console.error('Error deleting season:', error);
+      setNotification({ type: 'error', message: 'Error al eliminar la temporada' });
+    }
+  };
+
+  const handleNavigateToDashboard = () => {
+    navigate('/dashboard');
   };
 
   const resetForm = () => {
@@ -132,7 +181,6 @@ const Seasons: React.FC = () => {
       registrationDeadline: '',
       description: '',
       basePrice: 2000,
-      earlyBirdDiscount: 10,
       rules: [''],
     });
   };
@@ -182,6 +230,11 @@ const Seasons: React.FC = () => {
     });
   };
 
+  const toggleDropdown = (seasonId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDropdownOpen(dropdownOpen === seasonId ? null : seasonId);
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -190,11 +243,20 @@ const Seasons: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Temporadas</h1>
-          <p className="text-gray-600 mt-2">
-            Gestiona las temporadas de Tocho Prime. Cada temporada contiene divisiones, categorías y equipos.
-          </p>
+        <div className="flex items-center">
+          <button
+            onClick={handleNavigateToDashboard}
+            className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Volver al panel principal"
+          >
+            <HomeIcon className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Temporadas</h1>
+            <p className="text-gray-600 mt-2">
+              Gestiona las temporadas de Tocho Prime. Cada temporada contiene divisiones, categorías y equipos.
+            </p>
+          </div>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -219,8 +281,108 @@ const Seasons: React.FC = () => {
         {seasons.map((season) => (
           <div
             key={season.id}
-            className="bg-white rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-shadow"
+            className="bg-white rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-shadow relative"
           >
+            {/* Actions Dropdown */}
+            <div className="absolute top-4 right-4">
+              <div className="relative">
+                <button
+                  onClick={(e) => toggleDropdown(season.id, e)}
+                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg 
+                    className={`w-5 h-5 transition-transform ${dropdownOpen === season.id ? 'rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {dropdownOpen === season.id && (
+                  <div 
+                    className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          navigate(`/temporadas/${season.id}`);
+                          setDropdownOpen(null);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <EyeIcon className="w-4 h-4 mr-3" />
+                        Ver Detalles
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          navigate(`/temporadas/${season.id}?edit=true`);
+                          setDropdownOpen(null);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <PencilIcon className="w-4 h-4 mr-3" />
+                        Editar
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setSelectedSeason(season);
+                          setShowDuplicateModal(true);
+                          setDropdownOpen(null);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <DocumentDuplicateIcon className="w-4 h-4 mr-3" />
+                        Duplicar
+                      </button>
+                      
+                      {season.status === 'archived' ? (
+                        <button
+                          onClick={() => {
+                            handleUnarchiveSeason(season.id);
+                          }}
+                          className="flex items-center w-full px-4 py-2 text-sm text-green-600 hover:bg-green-50 transition-colors"
+                        >
+                          <ArrowUturnLeftIcon className="w-4 h-4 mr-3" />
+                          Desarchivar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            if (window.confirm('¿Estás seguro de que deseas archivar esta temporada?')) {
+                              handleArchiveSeason(season.id);
+                            }
+                          }}
+                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          <ArchiveBoxIcon className="w-4 h-4 mr-3" />
+                          Archivar
+                        </button>
+                      )}
+                      
+                      <div className="border-t border-gray-200 my-1"></div>
+                      
+                      <button
+                        onClick={() => {
+                          setSelectedSeason(season);
+                          setShowDeleteModal(true);
+                          setDropdownOpen(null);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <TrashIcon className="w-4 h-4 mr-3" />
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="p-6">
               {/* Header */}
               <div className="flex justify-between items-start mb-4">
@@ -234,25 +396,6 @@ const Seasons: React.FC = () => {
                     </span>
                   </span>
                   <h3 className="text-xl font-semibold text-gray-900 mt-2">{season.name}</h3>
-                </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => navigate(`/seasons/${season.id}`)}
-                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="Ver detalles"
-                  >
-                    <EyeIcon className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedSeason(season);
-                      setShowDuplicateModal(true);
-                    }}
-                    className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                    title="Duplicar"
-                  >
-                    <DocumentDuplicateIcon className="w-5 h-5" />
-                  </button>
                 </div>
               </div>
 
@@ -282,24 +425,14 @@ const Seasons: React.FC = () => {
               {/* Footer */}
               <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                 <div className="text-sm text-gray-500">
-                  Precio base: <span className="font-semibold">${season.priceConfiguration?.basePrice || 0}</span>
+                  Precio: <span className="font-semibold">${season.priceConfiguration?.basePrice || 0}</span>
                 </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => navigate(`/seasons/${season.id}`)}
-                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Gestionar
-                  </button>
-                  {season.status !== 'archived' && (
-                    <button
-                      onClick={() => handleArchiveSeason(season.id)}
-                      className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      Archivar
-                    </button>
-                  )}
-                </div>
+                <button
+                  onClick={() => navigate(`/temporadas/${season.id}`)}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Gestionar
+                </button>
               </div>
             </div>
           </div>
@@ -314,13 +447,22 @@ const Seasons: React.FC = () => {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay temporadas</h3>
           <p className="text-gray-600 mb-6">Comienza creando tu primera temporada</p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <PlusIcon className="w-5 h-5 mr-2" />
-            Crear Primera Temporada
-          </button>
+          <div className="space-x-3">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <PlusIcon className="w-5 h-5 mr-2" />
+              Crear Primera Temporada
+            </button>
+            <button
+              onClick={handleNavigateToDashboard}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <HomeIcon className="w-5 h-5 mr-2" />
+              Volver al Panel
+            </button>
+          </div>
         </div>
       )}
 
@@ -402,41 +544,28 @@ const Seasons: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Precio Base ($)
-              </label>
-              <input
-                type="number"
-                value={newSeason.basePrice}
-                onChange={(e) => setNewSeason({ ...newSeason, basePrice: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                min="0"
-                step="50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Descuento por Pago Anticipado (%)
-              </label>
-              <input
-                type="number"
-                value={newSeason.earlyBirdDiscount}
-                onChange={(e) => setNewSeason({ ...newSeason, earlyBirdDiscount: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                min="0"
-                max="100"
-                step="5"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Precio por Equipo ($)
+            </label>
+            <input
+              type="number"
+              value={newSeason.basePrice}
+              onChange={(e) => setNewSeason({ ...newSeason, basePrice: Number(e.target.value) })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              min="0"
+              step="50"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Precio único por equipo para participar en la temporada
+            </p>
           </div>
 
           {/* Rules */}
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="block text-sm font-medium text-gray-700">
-                Reglas de la Temporada
+                Reglas de la Temporada (Opcional)
               </label>
               <button
                 type="button"
@@ -525,6 +654,64 @@ const Seasons: React.FC = () => {
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
               >
                 Duplicar Temporada
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete Season Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSelectedSeason(null);
+        }}
+        title="Eliminar Temporada"
+        size="md"
+      >
+        {selectedSeason && (
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex">
+                <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">¡Atención! Esta acción no se puede deshacer</h3>
+                  <div className="mt-2 text-sm text-red-700">
+                    <p>
+                      Estás a punto de eliminar permanentemente la temporada "{selectedSeason.name}".
+                      Todos los datos asociados (divisiones, categorías, equipos, etc.) también serán eliminados.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              <p className="font-medium">Información que será eliminada:</p>
+              <ul className="list-disc pl-5 mt-2 space-y-1">
+                <li>Datos de la temporada</li>
+                <li>Divisiones y categorías asociadas</li>
+                <li>Equipos registrados en esta temporada</li>
+                <li>Partidos programados</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSelectedSeason(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteSeason}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Eliminar Permanentemente
               </button>
             </div>
           </div>

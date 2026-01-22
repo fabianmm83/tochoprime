@@ -24,11 +24,9 @@ const LocationsSection: React.FC = () => {
       status: 'active',
       description: 'Sede con 4 campos',
       features: [
-        '4 campos ',
+        '4 campos de césped natural ',
         'baños ',
-        'Sistema de videomarcador',
-        'Gradas',
-        'Cafetería',
+        'Área de Comida',
       ],
       mapUrl: '#',
       color: 'bg-purple-500',

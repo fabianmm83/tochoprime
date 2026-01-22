@@ -39,7 +39,8 @@ export interface Division {
   seasonId: string;
   name: 'Varonil' | 'Femenil' | 'Mixto' | string;
   description: string;
-  rules: string[];
+  rules?: string[];
+  rulesUrl?: string;
   order: number;
   color: string;
   teamLimit?: number;
@@ -130,7 +131,7 @@ export interface Team {
   coach?: {
     name: string;
     phone: string;
-    email: string;
+    email?: string;
   };
   playerCount: number;
   registrationDate: Date | string;
