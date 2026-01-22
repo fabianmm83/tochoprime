@@ -1,235 +1,79 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
-  matchService, 
-  seasonService, 
-  divisionService,
-  categoryService,
-  fieldService,
-  teamService,
-  refereeService 
+  matchesService, 
+  seasonsService, 
+  divisionsService, 
+  teamsService,
+  refereesService 
 } from '../services/firestore';
-import { Match, Season, Division, Category, Field, Team, Referee } from '../types';
+import { Match, Season, Division, Team, Referee } from '../types';
 import { useAuth } from '../context/AuthContext';
+import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Notification from '../components/common/Notification';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-// Esquema de validación para crear/editar partido
-const matchSchema = z.object({
-  seasonId: z.string().min(1, 'La temporada es requerida'),
-  divisionId: z.string().min(1, 'La división es requerida'),
-  categoryId: z.string().min(1, 'La categoría es requerida'),
-  fieldId: z.string().min(1, 'El campo es requerido'),
-  homeTeamId: z.string().min(1, 'El equipo local es requerido'),
-  awayTeamId: z.string().min(1, 'El equipo visitante es requerido'),
-  matchDate: z.string().min(1, 'La fecha es requerida'),
-  matchTime: z.string().min(1, 'La hora es requerida'),
-  round: z.number().min(1, 'La jornada debe ser mayor a 0'),
-  status: z.enum(['scheduled', 'in_progress', 'completed', 'cancelled', 'postponed']),
-  isPlayoff: z.boolean(),
-  playoffStage: z.enum(['quarterfinals', 'semifinals', 'final', 'third_place']).optional(),
-  refereeId: z.string().optional(),
-  notes: z.string().optional(),
-  weather: z.enum(['sunny', 'cloudy', 'rainy', 'stormy']).optional(),
-  spectators: z.number().min(0).optional()
-});
-
-type MatchFormData = z.infer<typeof matchSchema>;
-
-// Esquema de validación para resultado
-const resultSchema = z.object({
-  homeScore: z.number().min(0, 'Los goles no pueden ser negativos'),
-  awayScore: z.number().min(0, 'Los goles no pueden ser negativos'),
-  notes: z.string().optional()
-});
-
-type ResultFormData = z.infer<typeof resultSchema>;
-
-interface MatchDetailProps {
-  mode: 'create' | 'edit' | 'view' | 'result';
-}
-
-const MatchDetail: React.FC<MatchDetailProps> = ({ mode }) => {
-  const { id } = useParams<{ id: string }>();
+const Matches: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
   // Estados
-  const [match, setMatch] = useState<Match | null>(null);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [referees, setReferees] = useState<Referee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
   
-  // Estados para datos relacionados
-  const [seasons, setSeasons] = useState<Season[]>([]);
-  const [divisions, setDivisions] = useState<Division[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [fields, setFields] = useState<Field[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [referees, setReferees] = useState<Referee[]>([]);
-  
-  // Formularios
-  const { 
-    control: matchControl,
-    handleSubmit: handleMatchSubmit,
-    formState: { errors: matchErrors },
-    reset: resetMatchForm,
-    watch: watchMatch
-  } = useForm<MatchFormData>({
-    resolver: zodResolver(matchSchema),
-    defaultValues: {
-      seasonId: '',
-      divisionId: '',
-      categoryId: '',
-      fieldId: '',
-      homeTeamId: '',
-      awayTeamId: '',
-      matchDate: format(new Date(), 'yyyy-MM-dd'),
-      matchTime: '18:00',
-      round: 1,
-      status: 'scheduled',
-      isPlayoff: false,
-      playoffStage: undefined,
-      refereeId: '',
-      notes: '',
-      weather: 'sunny',
-      spectators: 0
-    }
-  });
-  
-  const {
-    control: resultControl,
-    handleSubmit: handleResultSubmit,
-    formState: { errors: resultErrors },
-    reset: resetResultForm
-  } = useForm<ResultFormData>({
-    resolver: zodResolver(resultSchema),
-    defaultValues: {
-      homeScore: 0,
-      awayScore: 0,
-      notes: ''
-    }
-  });
-  
-  // Observar cambios en los campos del formulario
-  const watchSeasonId = watchMatch('seasonId');
-  const watchDivisionId = watchMatch('divisionId');
-  const watchIsPlayoff = watchMatch('isPlayoff');
+  // Filtros
+  const [selectedSeason, setSelectedSeason] = useState<string>('');
+  const [selectedDivision, setSelectedDivision] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Cargar datos iniciales
   useEffect(() => {
-    loadRelatedData();
-    
-    if (id && mode !== 'create') {
-      loadMatch(id);
-    }
-  }, [id, mode]);
+    loadData();
+  }, []);
   
-  // Cargar datos relacionados cuando cambian las selecciones
+  // Cargar datos cuando cambian los filtros
   useEffect(() => {
-    if (watchSeasonId) {
-      loadDivisions(watchSeasonId);
-      loadReferees(watchSeasonId);
+    if (selectedSeason) {
+      loadDivisions(selectedSeason);
+      loadMatches(selectedSeason);
+      loadReferees(selectedSeason);
     }
-  }, [watchSeasonId]);
+  }, [selectedSeason]);
   
   useEffect(() => {
-    if (watchDivisionId) {
-      loadCategories(watchDivisionId);
-      loadTeams(watchDivisionId);
+    if (selectedDivision) {
+      loadTeams(selectedDivision);
+      loadMatchesByDivision(selectedDivision);
     }
-  }, [watchDivisionId]);
+  }, [selectedDivision]);
   
-  const loadRelatedData = async () => {
-    try {
-      const [
-        seasonsData,
-        fieldsData
-      ] = await Promise.all([
-        seasonService.getSeasons(),
-        fieldService.getFields()
-      ]);
-      
-      setSeasons(seasonsData);
-      setFields(fieldsData);
-      
-      if (seasonsData.length > 0 && !id) {
-        resetMatchForm({
-          ...matchControl._defaultValues,
-          seasonId: seasonsData[0].id
-        });
-      }
-    } catch (error) {
-      console.error('Error loading related data:', error);
-      setNotification({
-        type: 'error',
-        message: 'Error al cargar los datos relacionados'
-      });
-    }
-  };
-  
-  const loadMatch = async (matchId: string) => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const matchData = await matchService.getMatchById(matchId);
+      const seasonsData = await seasonsService.getSeasons();
+      setSeasons(seasonsData);
       
-      if (!matchData) {
-        setNotification({
-          type: 'error',
-          message: 'Partido no encontrado'
-        });
-        navigate('/matches');
-        return;
-      }
-      
-      setMatch(matchData);
-      
-      if (mode === 'edit' || mode === 'view') {
-        // Convertir estado del partido para el formulario
-        const matchDate = matchData.matchDate instanceof Date 
-          ? matchData.matchDate 
-          : new Date(matchData.matchDate);
-        
-        resetMatchForm({
-          seasonId: matchData.seasonId,
-          divisionId: matchData.divisionId,
-          categoryId: matchData.categoryId,
-          fieldId: matchData.fieldId,
-          homeTeamId: matchData.homeTeamId,
-          awayTeamId: matchData.awayTeamId,
-          matchDate: format(matchDate, 'yyyy-MM-dd'),
-          matchTime: matchData.matchTime,
-          round: matchData.round,
-          status: matchData.status,
-          isPlayoff: matchData.isPlayoff,
-          playoffStage: matchData.playoffStage,
-          refereeId: matchData.refereeId || '',
-          notes: matchData.notes || '',
-          weather: matchData.weather || 'sunny',
-          spectators: matchData.spectators || 0
-        });
-      }
-      
-      if (mode === 'result') {
-        resetResultForm({
-          homeScore: matchData.homeScore || 0,
-          awayScore: matchData.awayScore || 0,
-          notes: matchData.notes || ''
-        });
+      if (seasonsData.length > 0) {
+        setSelectedSeason(seasonsData[0].id);
       }
     } catch (error) {
-      console.error('Error loading match:', error);
+      console.error('Error loading data:', error);
       setNotification({
         type: 'error',
-        message: 'Error al cargar el partido'
+        message: 'Error al cargar los datos'
       });
     } finally {
       setLoading(false);
@@ -238,47 +82,177 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ mode }) => {
   
   const loadDivisions = async (seasonId: string) => {
     try {
-      const divisionsData = await divisionService.getDivisionsBySeason(seasonId);
+      const divisionsData = await divisionsService.getDivisionsBySeason(seasonId);
       setDivisions(divisionsData);
+      
+      if (divisionsData.length > 0) {
+        setSelectedDivision(divisionsData[0].id);
+      }
     } catch (error) {
       console.error('Error loading divisions:', error);
     }
   };
   
-  const loadCategories = async (divisionId: string) => {
-    try {
-      const categoriesData = await categoryService.getCategoriesByDivision(divisionId);
-      setCategories(categoriesData);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    }
-  };
-  
   const loadTeams = async (divisionId: string) => {
     try {
-      const teamsData = await teamService.getTeamsByDivision(divisionId);
+      const teamsData = await teamsService.getTeamsByDivision(divisionId);
       setTeams(teamsData);
     } catch (error) {
       console.error('Error loading teams:', error);
     }
   };
   
+  const loadMatches = async (seasonId: string) => {
+    try {
+      const matchesData = await matchesService.getMatches(seasonId);
+      setMatches(matchesData);
+    } catch (error) {
+      console.error('Error loading matches:', error);
+    }
+  };
+  
+  const loadMatchesByDivision = async (divisionId: string) => {
+    try {
+      const matchesData = await matchesService.getMatchesByDivision(divisionId);
+      setMatches(matchesData);
+    } catch (error) {
+      console.error('Error loading matches by division:', error);
+    }
+  };
+  
   const loadReferees = async (seasonId: string) => {
     try {
-      const refereesData = await refereeService.getReferees(seasonId);
+      const refereesData = await refereesService.getReferees(seasonId);
       setReferees(refereesData);
     } catch (error) {
       console.error('Error loading referees:', error);
     }
   };
   
-  // Obtener información del equipo
-  const getTeamInfo = (teamId: string) => {
-    return teams.find(team => team.id === teamId);
+  // Filtrar partidos
+  const filteredMatches = useMemo(() => {
+    return matches.filter(match => {
+      // Filtrar por estado
+      if (selectedStatus) {
+        let matchStatus = '';
+        switch (match.status) {
+          case 'scheduled': matchStatus = 'programado'; break;
+          case 'in_progress': matchStatus = 'en_curso'; break;
+          case 'completed': matchStatus = 'finalizado'; break;
+          case 'cancelled': matchStatus = 'cancelado'; break;
+          case 'postponed': matchStatus = 'suspendido'; break;
+          default: matchStatus = '';
+        }
+        
+        if (matchStatus !== selectedStatus) {
+          return false;
+        }
+      }
+      
+      // Filtrar por búsqueda
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        return (
+          match.homeTeam?.name.toLowerCase().includes(term) ||
+          match.awayTeam?.name.toLowerCase().includes(term) ||
+          match.refereeName?.toLowerCase().includes(term) ||
+          match.notes?.toLowerCase().includes(term)
+        );
+      }
+      
+      return true;
+    });
+  }, [matches, selectedStatus, searchTerm]);
+  
+  // Agrupar partidos por ronda
+  const matchesByRound = useMemo(() => {
+    const groups: Record<number, Match[]> = {};
+    
+    filteredMatches.forEach(match => {
+      if (!groups[match.round]) {
+        groups[match.round] = [];
+      }
+      groups[match.round].push(match);
+    });
+    
+    // Ordenar rondas
+    return Object.entries(groups)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .reduce((acc, [round, matches]) => {
+        acc[parseInt(round)] = matches;
+        return acc;
+      }, {} as Record<number, Match[]>);
+  }, [filteredMatches]);
+  
+  // Manejar generación de calendario
+  const handleGenerateCalendar = async () => {
+    if (!selectedSeason || !selectedDivision || teams.length < 2) {
+      setNotification({
+        type: 'error',
+        message: 'Se necesitan al menos 2 equipos para generar el calendario'
+      });
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      await matchesService.generateSeasonCalendar(selectedSeason, selectedDivision, teams);
+      
+      setNotification({
+        type: 'success',
+        message: 'Calendario generado exitosamente'
+      });
+      
+      // Recargar partidos
+      loadMatchesByDivision(selectedDivision);
+    } catch (error) {
+      console.error('Error generating calendar:', error);
+      setNotification({
+        type: 'error',
+        message: 'Error al generar el calendario'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
   
-  // Traducir estado al español para mostrar
-  const translateStatus = (status: Match['status']): string => {
+  // Manejar eliminación de partido
+  const handleDeleteMatch = async (matchId: string) => {
+    if (!confirm('¿Estás seguro de eliminar este partido?')) return;
+    
+    try {
+      await matchesService.deleteMatch(matchId);
+      
+      // Actualizar lista
+      setMatches(matches.filter(match => match.id !== matchId));
+      
+      setNotification({
+        type: 'success',
+        message: 'Partido eliminado exitosamente'
+      });
+    } catch (error) {
+      console.error('Error deleting match:', error);
+      setNotification({
+        type: 'error',
+        message: 'Error al eliminar el partido'
+      });
+    }
+  };
+  
+  // Obtener color según estado
+  const getStatusColor = (status: Match['status']) => {
+    switch (status) {
+      case 'scheduled': return 'bg-blue-100 text-blue-800';
+      case 'in_progress': return 'bg-yellow-100 text-yellow-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'postponed': return 'bg-red-100 text-red-800';
+      case 'cancelled': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+  
+  // Traducir estado al español
+  const translateStatus = (status: Match['status']) => {
     switch (status) {
       case 'scheduled': return 'Programado';
       case 'in_progress': return 'En curso';
@@ -289,672 +263,10 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ mode }) => {
     }
   };
   
-  // Traducir estado del español al inglés
-  const translateStatusToEnglish = (status: string): Match['status'] => {
-    switch (status) {
-      case 'programado': return 'scheduled';
-      case 'en_curso': return 'in_progress';
-      case 'finalizado': return 'completed';
-      case 'suspendido': return 'postponed';
-      case 'cancelado': return 'cancelled';
-      default: return 'scheduled';
-    }
-  };
-  
-  // Manejar guardar partido
-  const onSaveMatch = async (data: MatchFormData) => {
-    try {
-      setSaving(true);
-      
-      // Obtener información de los equipos
-      const homeTeam = getTeamInfo(data.homeTeamId);
-      const awayTeam = getTeamInfo(data.awayTeamId);
-      
-      if (!homeTeam || !awayTeam) {
-        throw new Error('Equipo no encontrado');
-      }
-      
-      // Crear objeto de partido
-      const matchData: Omit<Match, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'> = {
-        seasonId: data.seasonId,
-        divisionId: data.divisionId,
-        categoryId: data.categoryId,
-        fieldId: data.fieldId,
-        homeTeamId: data.homeTeamId,
-        awayTeamId: data.awayTeamId,
-        matchDate: new Date(`${data.matchDate}T${data.matchTime}:00`),
-        matchTime: data.matchTime,
-        round: data.round,
-        status: data.status,
-        isPlayoff: data.isPlayoff,
-        playoffStage: data.isPlayoff ? data.playoffStage : undefined,
-        refereeId: data.refereeId || undefined,
-        refereeName: data.refereeId ? referees.find(r => r.id === data.refereeId)?.fullName : undefined,
-        notes: data.notes || undefined,
-        weather: data.weather || undefined,
-        spectators: data.spectators || undefined,
-        homeScore: undefined,
-        awayScore: undefined,
-        winner: undefined,
-        resultDetails: undefined
-      };
-      
-      if (mode === 'create') {
-        const matchId = await matchService.createMatch(matchData);
-        setNotification({
-          type: 'success',
-          message: 'Partido creado exitosamente'
-        });
-        navigate(`/matches/${matchId}`);
-      } else if (mode === 'edit' && id) {
-        await matchService.updateMatch(id, matchData);
-        setNotification({
-          type: 'success',
-          message: 'Partido actualizado exitosamente'
-        });
-        navigate(`/matches/${id}`);
-      }
-    } catch (error) {
-      console.error('Error saving match:', error);
-      setNotification({
-        type: 'error',
-        message: 'Error al guardar el partido'
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-  
-  // Manejar guardar resultado
-  const onSaveResult = async (data: ResultFormData) => {
-    if (!id) return;
-    
-    try {
-      setSaving(true);
-      await matchService.updateMatchResult(
-        id,
-        data.homeScore,
-        data.awayScore,
-        data.notes
-      );
-      
-      setNotification({
-        type: 'success',
-        message: 'Resultado registrado exitosamente'
-      });
-      
-      navigate(`/matches/${id}`);
-    } catch (error) {
-      console.error('Error saving result:', error);
-      setNotification({
-        type: 'error',
-        message: 'Error al registrar el resultado'
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-  
-  // Manejar eliminar
-  const handleDelete = async () => {
-    if (!id || !confirm('¿Estás seguro de eliminar este partido?')) return;
-    
-    try {
-      await matchService.deleteMatch(id);
-      setNotification({
-        type: 'success',
-        message: 'Partido eliminado exitosamente'
-      });
-      navigate('/matches');
-    } catch (error) {
-      console.error('Error deleting match:', error);
-      setNotification({
-        type: 'error',
-        message: 'Error al eliminar el partido'
-      });
-    }
-  };
-  
-  // Renderizar formulario según el modo
-  const renderForm = () => {
-    if (mode === 'result') {
-      return (
-        <form onSubmit={handleResultSubmit(onSaveResult)} className="space-y-6">
-          {/* Equipos y resultado */}
-          <div className="bg-gray-50 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-8">
-              {/* Equipo local */}
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900 mb-2">
-                  {match?.homeTeam?.name || 'Equipo local'}
-                </div>
-                <Controller
-                  name="homeScore"
-                  control={resultControl}
-                  render={({ field }) => (
-                    <input
-                      {...field}
-                      type="number"
-                      min="0"
-                      className="w-24 h-24 text-4xl text-center border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                    />
-                  )}
-                />
-                {resultErrors.homeScore && (
-                  <p className="mt-2 text-sm text-red-600">{resultErrors.homeScore.message}</p>
-                )}
-              </div>
-              
-              {/* Separador */}
-              <div className="text-4xl font-bold text-gray-700 mx-8">VS</div>
-              
-              {/* Equipo visitante */}
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900 mb-2">
-                  {match?.awayTeam?.name || 'Equipo visitante'}
-                </div>
-                <Controller
-                  name="awayScore"
-                  control={resultControl}
-                  render={({ field }) => (
-                    <input
-                      {...field}
-                      type="number"
-                      min="0"
-                      className="w-24 h-24 text-4xl text-center border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                    />
-                  )}
-                />
-                {resultErrors.awayScore && (
-                  <p className="mt-2 text-sm text-red-600">{resultErrors.awayScore.message}</p>
-                )}
-              </div>
-            </div>
-            
-            {/* Notas */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notas del partido
-              </label>
-              <Controller
-                name="notes"
-                control={resultControl}
-                render={({ field }) => (
-                  <textarea
-                    {...field}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Detalles del partido, incidencias, etc."
-                  />
-                )}
-              />
-            </div>
-          </div>
-          
-          {/* Botones */}
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={() => navigate(`/matches/${id}`)}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Guardando...' : 'Registrar Resultado'}
-            </button>
-          </div>
-        </form>
-      );
-    }
-    
-    return (
-      <form onSubmit={handleMatchSubmit(onSaveMatch)} className="space-y-6">
-        {/* Información básica */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Temporada */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Temporada *
-            </label>
-            <Controller
-              name="seasonId"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view'}
-                >
-                  <option value="">Seleccionar temporada</option>
-                  {seasons.map(season => (
-                    <option key={season.id} value={season.id}>
-                      {season.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            />
-            {matchErrors.seasonId && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.seasonId.message}</p>
-            )}
-          </div>
-          
-          {/* División */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              División *
-            </label>
-            <Controller
-              name="divisionId"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view' || !watchSeasonId}
-                >
-                  <option value="">Seleccionar división</option>
-                  {divisions.map(division => (
-                    <option key={division.id} value={division.id}>
-                      {division.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            />
-            {matchErrors.divisionId && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.divisionId.message}</p>
-            )}
-          </div>
-        </div>
-        
-        {/* Equipos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Equipo local */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Equipo Local *
-            </label>
-            <Controller
-              name="homeTeamId"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view' || !watchDivisionId}
-                >
-                  <option value="">Seleccionar equipo local</option>
-                  {teams.map(team => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            />
-            {matchErrors.homeTeamId && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.homeTeamId.message}</p>
-            )}
-          </div>
-          
-          {/* Equipo visitante */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Equipo Visitante *
-            </label>
-            <Controller
-              name="awayTeamId"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view' || !watchDivisionId}
-                >
-                  <option value="">Seleccionar equipo visitante</option>
-                  {teams.map(team => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            />
-            {matchErrors.awayTeamId && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.awayTeamId.message}</p>
-            )}
-          </div>
-        </div>
-        
-        {/* Fecha, hora y campo */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Fecha */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Fecha *
-            </label>
-            <Controller
-              name="matchDate"
-              control={matchControl}
-              render={({ field }) => (
-                <input
-                  {...field}
-                  type="date"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view'}
-                />
-              )}
-            />
-            {matchErrors.matchDate && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.matchDate.message}</p>
-            )}
-          </div>
-          
-          {/* Hora */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hora *
-            </label>
-            <Controller
-              name="matchTime"
-              control={matchControl}
-              render={({ field }) => (
-                <input
-                  {...field}
-                  type="time"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view'}
-                />
-              )}
-            />
-            {matchErrors.matchTime && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.matchTime.message}</p>
-            )}
-          </div>
-          
-          {/* Campo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Campo *
-            </label>
-            <Controller
-              name="fieldId"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view'}
-                >
-                  <option value="">Seleccionar campo</option>
-                  {fields.map(field => (
-                    <option key={field.id} value={field.id}>
-                      {field.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            />
-            {matchErrors.fieldId && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.fieldId.message}</p>
-            )}
-          </div>
-        </div>
-        
-        {/* Detalles del partido */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Categoría */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Categoría *
-            </label>
-            <Controller
-              name="categoryId"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view' || !watchDivisionId}
-                >
-                  <option value="">Seleccionar categoría</option>
-                  {categories.map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            />
-            {matchErrors.categoryId && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.categoryId.message}</p>
-            )}
-          </div>
-          
-          {/* Jornada */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Jornada *
-            </label>
-            <Controller
-              name="round"
-              control={matchControl}
-              render={({ field }) => (
-                <input
-                  {...field}
-                  type="number"
-                  min="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view'}
-                  onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                />
-              )}
-            />
-            {matchErrors.round && (
-              <p className="mt-2 text-sm text-red-600">{matchErrors.round.message}</p>
-            )}
-          </div>
-        </div>
-        
-        {/* Playoff */}
-<div className="flex items-center space-x-3">
-  <Controller
-    name="isPlayoff"
-    control={matchControl}
-    render={({ field }) => (
-      <input
-        type="checkbox"
-        id="isPlayoff"
-        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-        disabled={mode === 'view'}
-        checked={field.value}
-        onChange={(e) => field.onChange(e.target.checked)}
-        onBlur={field.onBlur}
-        ref={field.ref}
-        name={field.name}
-        // Eliminar value prop o convertirlo a string
-      />
-    )}
-  />
-  <label htmlFor="isPlayoff" className="text-sm font-medium text-gray-700">
-    Partido de Playoff
-  </label>
-</div>
-        
-        {watchIsPlayoff && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Fase de Playoff
-            </label>
-            <Controller
-              name="playoffStage"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view'}
-                >
-                  <option value="">Seleccionar fase</option>
-                  <option value="quarterfinals">Cuartos de final</option>
-                  <option value="semifinals">Semifinal</option>
-                  <option value="final">Final</option>
-                  <option value="third_place">Tercer lugar</option>
-                </select>
-              )}
-            />
-          </div>
-        )}
-        
-        {/* Árbitro y estado */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Árbitro */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Árbitro
-            </label>
-            <Controller
-              name="refereeId"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view' || !watchSeasonId}
-                >
-                  <option value="">Sin árbitro asignado</option>
-                  {referees.map(referee => (
-                    <option key={referee.id} value={referee.id}>
-                      {referee.fullName} ({referee.level})
-                    </option>
-                  ))}
-                </select>
-              )}
-            />
-          </div>
-          
-          {/* Estado */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Estado *
-            </label>
-            <Controller
-              name="status"
-              control={matchControl}
-              render={({ field }) => (
-                <select
-                  {...field}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={mode === 'view'}
-                >
-                  <option value="scheduled">Programado</option>
-                  <option value="in_progress">En curso</option>
-                  <option value="completed">Finalizado</option>
-                  <option value="postponed">Suspendido</option>
-                  <option value="cancelled">Cancelado</option>
-                </select>
-              )}
-            />
-          </div>
-        </div>
-        
-        {/* Notas y clima */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Notas */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notas
-            </label>
-            <Controller
-              name="notes"
-              control={matchControl}
-              render={({ field }) => (
-                <textarea
-                  {...field}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Detalles del partido, incidencias, etc."
-                  disabled={mode === 'view'}
-                />
-              )}
-            />
-          </div>
-          
-          {/* Clima y espectadores */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Clima
-              </label>
-              <Controller
-                name="weather"
-                control={matchControl}
-                render={({ field }) => (
-                  <select
-                    {...field}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={mode === 'view'}
-                  >
-                    <option value="sunny">Soleado</option>
-                    <option value="cloudy">Nublado</option>
-                    <option value="rainy">Lluvia</option>
-                    <option value="stormy">Tormenta</option>
-                  </select>
-                )}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Espectadores
-              </label>
-              <Controller
-                name="spectators"
-                control={matchControl}
-                render={({ field }) => (
-                  <input
-                    {...field}
-                    type="number"
-                    min="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={mode === 'view'}
-                    onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                  />
-                )}
-              />
-            </div>
-          </div>
-        </div>
-        
-        {/* Botones (solo para crear/editar) */}
-        {mode !== 'view' && (
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={() => navigate('/matches')}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Guardando...' : mode === 'create' ? 'Crear Partido' : 'Actualizar Partido'}
-            </button>
-          </div>
-        )}
-      </form>
-    );
+  // Formatear fecha
+  const formatDate = (date: Date | string) => {
+    const dateObj = date instanceof Date ? date : new Date(date);
+    return format(dateObj, "dd 'de' MMMM 'de' yyyy", { locale: es });
   };
   
   if (loading) return <LoadingSpinner />;
@@ -962,44 +274,8 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ mode }) => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {mode === 'create' ? 'Nuevo Partido' : 
-               mode === 'edit' ? 'Editar Partido' :
-               mode === 'result' ? 'Registrar Resultado' : 'Detalles del Partido'}
-            </h1>
-            <p className="text-gray-600">
-              {mode === 'create' ? 'Crea un nuevo partido para la liga' :
-               mode === 'edit' ? 'Modifica la información del partido' :
-               mode === 'result' ? 'Registra el resultado final del partido' :
-               'Información completa del partido'}
-            </p>
-          </div>
-          
-          {mode === 'view' && match && (
-            <div className="flex space-x-3">
-              <button
-                onClick={() => navigate(`/matches/${match.id}/result`)}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                Registrar Resultado
-              </button>
-              <button
-                onClick={() => navigate(`/matches/${match.id}/edit`)}
-                className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-              >
-                Editar
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                Eliminar
-              </button>
-            </div>
-          )}
-        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Partidos</h1>
+        <p className="text-gray-600">Gestión de partidos y calendario de la liga</p>
       </div>
       
       {/* Notificación */}
@@ -1011,140 +287,310 @@ const MatchDetail: React.FC<MatchDetailProps> = ({ mode }) => {
         />
       )}
       
-      {/* Vista de solo lectura para modo 'view' */}
-      {mode === 'view' && match ? (
-        <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-          {/* Información principal */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Equipos</h3>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div 
-                      className="w-6 h-6 rounded-full" 
-                      style={{ backgroundColor: match.homeTeam?.primaryColor || '#3B82F6' }}
-                    />
-                    <span className="font-medium">{match.homeTeam?.name || 'Equipo local'}</span>
-                  </div>
-                  <span className="text-2xl font-bold">VS</span>
-                  <div className="flex items-center space-x-3">
-                    <span className="font-medium">{match.awayTeam?.name || 'Equipo visitante'}</span>
-                    <div 
-                      className="w-6 h-6 rounded-full" 
-                      style={{ backgroundColor: match.awayTeam?.primaryColor || '#EF4444' }}
-                    />
-                  </div>
-                </div>
-                
-                {match.status === 'completed' && (
-                  <div className="text-center mt-4">
-                    <div className="inline-block bg-gray-100 px-6 py-3 rounded-lg">
-                      <span className="text-3xl font-bold text-gray-900">
-                        {match.homeScore || 0} - {match.awayScore || 0}
-                      </span>
-                      {match.winner && (
-                        <div className="text-sm text-gray-600 mt-1">
-                          Ganador: {match.winner === 'home' ? match.homeTeam?.name : match.awayTeam?.name}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Información del Partido</h3>
-                <dl className="space-y-2">
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Fecha y Hora:</dt>
-                    <dd className="font-medium">
-                      {format(new Date(match.matchDate), "dd 'de' MMMM 'de' yyyy", { locale: es })} - {match.matchTime}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Jornada:</dt>
-                    <dd className="font-medium">{match.round}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Estado:</dt>
-                    <dd>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        match.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                        match.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                        match.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        match.status === 'postponed' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {translateStatus(match.status).toUpperCase()}
-                      </span>
-                    </dd>
-                  </div>
-                  {match.isPlayoff && match.playoffStage && (
-                    <div className="flex justify-between">
-                      <dt className="text-gray-600">Fase de Playoff:</dt>
-                      <dd className="font-medium text-red-600">
-                        {match.playoffStage === 'quarterfinals' ? 'Cuartos de final' :
-                         match.playoffStage === 'semifinals' ? 'Semifinal' :
-                         match.playoffStage === 'final' ? 'Final' : 'Tercer lugar'}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-            </div>
+      {/* Filtros y controles */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          {/* Selector de temporada */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Temporada
+            </label>
+            <select
+              value={selectedSeason}
+              onChange={(e) => setSelectedSeason(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar temporada</option>
+              {seasons.map(season => (
+                <option key={season.id} value={season.id}>
+                  {season.name}
+                </option>
+              ))}
+            </select>
           </div>
           
-          {/* Información adicional */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Detalles Adicionales</h3>
-              <dl className="space-y-2">
-                {match.refereeName && (
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Árbitro:</dt>
-                    <dd className="font-medium">{match.refereeName}</dd>
-                  </div>
-                )}
-                {match.weather && (
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Clima:</dt>
-                    <dd className="font-medium capitalize">
-                      {match.weather === 'sunny' ? 'Soleado' :
-                       match.weather === 'cloudy' ? 'Nublado' :
-                       match.weather === 'rainy' ? 'Lluvia' :
-                       match.weather === 'stormy' ? 'Tormenta' : match.weather}
-                    </dd>
-                  </div>
-                )}
-                {match.spectators && (
-                  <div className="flex justify-between">
-                    <dt className="text-gray-600">Espectadores:</dt>
-                    <dd className="font-medium">{match.spectators}</dd>
-                  </div>
-                )}
-              </dl>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Notas</h3>
-              {match.notes ? (
-                <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">{match.notes}</p>
-              ) : (
-                <p className="text-gray-500 italic">Sin notas</p>
-              )}
-            </div>
+          {/* Selector de división */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              División
+            </label>
+            <select
+              value={selectedDivision}
+              onChange={(e) => setSelectedDivision(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={!selectedSeason}
+            >
+              <option value="">Seleccionar división</option>
+              {divisions.map(division => (
+                <option key={division.id} value={division.id}>
+                  {division.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Selector de estado */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Estado
+            </label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los estados</option>
+              <option value="programado">Programado</option>
+              <option value="en_curso">En curso</option>
+              <option value="finalizado">Finalizado</option>
+              <option value="suspendido">Suspendido</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+          
+          {/* Búsqueda */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Buscar
+            </label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por equipo o árbitro..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
+        
+        {/* Botones de acción */}
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => navigate('/partidos/nuevo')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Nuevo Partido
+          </button>
+          
+          <button
+            onClick={() => navigate('/partidos/generar-calendario')}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+          >
+            Generar Calendario
+          </button>
+          
+          <button
+            onClick={handleGenerateCalendar}
+            disabled={!selectedDivision || teams.length < 2}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Generar Automático
+          </button>
+          
+          <button
+            onClick={() => navigate('/calendario')}
+            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+          >
+            Ver Calendario
+          </button>
+          
+          <button
+            onClick={() => navigate('/arbitros')}
+            className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+          >
+            Gestionar Árbitros
+          </button>
+        </div>
+      </div>
+      
+      {/* Lista de partidos por ronda */}
+      {Object.entries(matchesByRound).length > 0 ? (
+        <div className="space-y-8">
+          {Object.entries(matchesByRound).map(([round, roundMatches]) => (
+            <div key={round} className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4">
+                <h2 className="text-xl font-bold text-white">
+                  Jornada {round} - {roundMatches.length} Partido{roundMatches.length !== 1 ? 's' : ''}
+                </h2>
+              </div>
+              
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {roundMatches.map(match => (
+                    <div
+                      key={match.id}
+                      className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300"
+                    >
+                      {/* Encabezado del partido */}
+                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                        <div className="flex justify-between items-center">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(match.status)}`}>
+                            {translateStatus(match.status).toUpperCase()}
+                          </span>
+                          <span className="text-sm text-gray-600">
+                            {formatDate(match.matchDate)} - {match.matchTime}
+                          </span>
+                        </div>
+                        
+                        {match.isPlayoff && match.playoffStage && (
+                          <div className="mt-2">
+                            <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded">
+                              PLAYOFF: {match.playoffStage.toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Contenido del partido */}
+                      <div className="p-4">
+                        {/* Equipos y resultado */}
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center space-x-3">
+                              <div 
+                                className="w-6 h-6 rounded-full" 
+                                style={{ backgroundColor: match.homeTeam?.primaryColor || '#3B82F6' }}
+                              />
+                              <div>
+                                <div className="font-medium text-gray-900">{match.homeTeam?.name || 'Equipo local'}</div>
+                                <div className="text-sm text-gray-600">
+                                  {match.status === 'completed' ? `Goles: ${match.homeScore || 0}` : 'Local'}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="text-2xl font-bold text-gray-900">VS</div>
+                            
+                            <div className="flex items-center space-x-3">
+                              <div>
+                                <div className="font-medium text-gray-900 text-right">{match.awayTeam?.name || 'Equipo visitante'}</div>
+                                <div className="text-sm text-gray-600 text-right">
+                                  {match.status === 'completed' ? `Goles: ${match.awayScore || 0}` : 'Visitante'}
+                                </div>
+                              </div>
+                              <div 
+                                className="w-6 h-6 rounded-full" 
+                                style={{ backgroundColor: match.awayTeam?.primaryColor || '#EF4444' }}
+                              />
+                            </div>
+                          </div>
+                          
+                          {/* Resultado final */}
+                          {match.status === 'completed' && (
+                            <div className="text-center mt-2">
+                              <div className="inline-block bg-gray-100 px-4 py-2 rounded-lg">
+                                <span className="text-lg font-bold text-gray-900">
+                                  {match.homeScore || 0} - {match.awayScore || 0}
+                                </span>
+                                {match.winner && (
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    Ganador: {match.winner === 'home' ? match.homeTeam?.name : match.awayTeam?.name}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Información adicional */}
+                        <div className="space-y-2 text-sm text-gray-600">
+                          {match.refereeName && (
+                            <div className="flex items-center">
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                              </svg>
+                              Árbitro: {match.refereeName}
+                            </div>
+                          )}
+                          
+                          {match.notes && (
+                            <div className="flex items-start">
+                              <svg className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                              </svg>
+                              <span className="truncate">{match.notes}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Acciones */}
+                      <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+                        <div className="flex justify-between">
+                          <Link
+                            to={`/partidos/${match.id}`}
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                          >
+                            Ver Detalles
+                          </Link>
+                          
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => navigate(`/partidos/${match.id}/editar`)}
+                              className="text-yellow-600 hover:text-yellow-800 text-sm"
+                            >
+                              Editar
+                            </button>
+                            
+                            {match.status === 'scheduled' && (
+                              <button
+                                onClick={() => navigate(`/partidos/${match.id}/resultado`)}
+                                className="text-green-600 hover:text-green-800 text-sm"
+                              >
+                                Registrar Resultado
+                              </button>
+                            )}
+                            
+                            <button
+                              onClick={() => handleDeleteMatch(match.id)}
+                              className="text-red-600 hover:text-red-800 text-sm"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          {renderForm()}
+        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+          <div className="mx-auto w-24 h-24 text-gray-400 mb-6">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-medium text-gray-900 mb-2">No hay partidos programados</h3>
+          <p className="text-gray-600 mb-6">
+            {selectedDivision 
+              ? 'Comienza generando el calendario o creando partidos manualmente.'
+              : 'Selecciona una temporada y división para ver los partidos.'
+            }
+          </p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <button
+              onClick={() => navigate('/partidos/nuevo')}
+              className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Crear Partido Manual
+            </button>
+            {selectedDivision && teams.length >= 2 && (
+              <button
+                onClick={handleGenerateCalendar}
+                className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+              >
+                Generar Calendario Automático
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 };
 
-export default MatchDetail;
+export default Matches;

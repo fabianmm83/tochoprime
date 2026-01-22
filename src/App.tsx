@@ -19,6 +19,9 @@ import AdminDashboard from './pages/AdminDashboard';
 
 import LandingPage from './pages/LandingPage';
 
+import TestStandings from './pages/TestStandings';
+import TestLiveScore from './pages/TestLiveScore';
+
 // Páginas del sistema existentes
 import Seasons from './pages/Seasons';
 import SeasonDetail from './pages/SeasonDetail';
@@ -35,6 +38,7 @@ import Calendar from './pages/Calendar';
 import Referees from './pages/Referees';
 import Leagues from './pages/Leagues';
 import LeagueDetail from './pages/LeagueDetail';
+import MatchSchedulerPage from './pages/MatchSchedulerPage';
 
 // Componente para redirección por rol
 const RoleBasedRedirect: React.FC = () => {
@@ -252,6 +256,33 @@ function App() {
             </PrivateRoute>
           } />
           
+          // Agregar después de /calendario
+<Route path="/partidos/generar-calendario" element={
+  <PrivateRoute>
+    <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
+      <MatchSchedulerPage />
+    </RoleBasedRoute>
+  </PrivateRoute>
+} />
+
+
+
+          <Route path="/test/standings" element={
+  <PrivateRoute>
+    <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro']}>
+      <TestStandings />
+    </RoleBasedRoute>
+  </PrivateRoute>
+} />
+
+<Route path="/test/livescore" element={
+  <PrivateRoute>
+    <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
+      <TestLiveScore />
+    </RoleBasedRoute>
+  </PrivateRoute>
+} />
+
           {/* Árbitros */}
           <Route path="/arbitros" element={
             <PrivateRoute>

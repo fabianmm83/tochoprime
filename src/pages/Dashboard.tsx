@@ -118,6 +118,27 @@ const Dashboard: React.FC = () => {
   etiqueta: 'Panel'
 },
 
+
+    // En el array menuItems de tu Dashboard, agrega:
+{
+  titulo: 'Tablas de Posiciones',
+  descripcion: 'Consulta las tablas de posiciones de la liga',
+  icono: TrophyIcon, // Puedes usar un icono diferente si prefieres
+  color: 'bg-yellow-500',
+  ruta: '/test/standings',
+  rolesPermitidos: ['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro'],
+  etiqueta: 'Prueba'
+},
+{
+  titulo: 'Marcador en Vivo',
+  descripcion: 'Sistema para árbitros - registro en tiempo real',
+  icono: TrophyIcon, // O usa ClockIcon
+  color: 'bg-green-500',
+  ruta: '/test/livescore',
+  rolesPermitidos: ['superadministrador', 'admin', 'arbitro'],
+  etiqueta: 'Prueba'
+},
+
     {
   titulo: 'Panel de Administrador',
   descripcion: 'Dashboard administrativo con estadísticas y gestión',

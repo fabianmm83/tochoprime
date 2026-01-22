@@ -2283,3 +2283,4 @@ export const teamService = teamsService;
 export const playerService = playersService;
 export const matchService = matchesService;
 export const refereeService = refereesService;
+export { parseFirestoreDate };
