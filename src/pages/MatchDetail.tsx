@@ -1,64 +1,84 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// src/pages/MatchDetail.tsx
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   matchesService, 
   seasonsService, 
   divisionsService, 
   teamsService,
-  refereesService 
+  refereesService,
+  fieldsService 
 } from '../services/firestore';
-import { Match, Season, Division, Team, Referee } from '../types';
+import { Match, Season, Division, Team, Referee, Field } from '../types';
 import { useAuth } from '../context/AuthContext';
-import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Notification from '../components/common/Notification';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const Matches: React.FC = () => {
-  const { user } = useAuth();
+type MatchDetailMode = 'view' | 'create' | 'edit' | 'result';
+
+const MatchDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  const path = location.pathname;
+  let mode: MatchDetailMode = 'view';
+  
+  if (path.includes('/partidos/nuevo') || path === '/partidos/nuevo') {
+    mode = 'create';
+  } else if (path.includes('/editar')) {
+    mode = 'edit';
+  } else if (path.includes('/resultado')) {
+    mode = 'result';
+  }
   
   // Estados
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [match, setMatch] = useState<Match | null>(null);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [referees, setReferees] = useState<Referee[]>([]);
+  const [fields, setFields] = useState<Field[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
   
-  // Filtros
-  const [selectedSeason, setSelectedSeason] = useState<string>('');
-  const [selectedDivision, setSelectedDivision] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
+  // Formulario - CORREGIDO: Todos los campos requeridos son strings no undefined
+  const [formData, setFormData] = useState({
+    seasonId: '',
+    divisionId: '',
+    homeTeamId: '',
+    awayTeamId: '',
+    refereeId: '',
+    fieldId: '',
+    matchDate: '',
+    matchTime: '',
+    notes: '',
+    status: 'scheduled' as 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'postponed',
+    homeScore: 0,
+    awayScore: 0,
+    winner: '' as '' | 'home' | 'away' | 'draw',
+    isPlayoff: false,
+    playoffStage: '' as '' | 'quarterfinals' | 'semifinals' | 'final' | 'third_place',
+    round: 1
+  });
   
   // Cargar datos iniciales
   useEffect(() => {
     loadData();
   }, []);
   
-  // Cargar datos cuando cambian los filtros
   useEffect(() => {
-    if (selectedSeason) {
-      loadDivisions(selectedSeason);
-      loadMatches(selectedSeason);
-      loadReferees(selectedSeason);
+    if (id && mode !== 'create') {
+      loadMatch(id);
     }
-  }, [selectedSeason]);
-  
-  useEffect(() => {
-    if (selectedDivision) {
-      loadTeams(selectedDivision);
-      loadMatchesByDivision(selectedDivision);
-    }
-  }, [selectedDivision]);
+  }, [id, mode]);
   
   const loadData = async () => {
     try {
@@ -66,9 +86,12 @@ const Matches: React.FC = () => {
       const seasonsData = await seasonsService.getSeasons();
       setSeasons(seasonsData);
       
-      if (seasonsData.length > 0) {
-        setSelectedSeason(seasonsData[0].id);
+      if (seasonsData.length > 0 && !formData.seasonId) {
+        setFormData(prev => ({ ...prev, seasonId: seasonsData[0].id }));
       }
+      
+      // Cargar todos los campos una vez al inicio
+      await loadFields();
     } catch (error) {
       console.error('Error loading data:', error);
       setNotification({
@@ -80,14 +103,61 @@ const Matches: React.FC = () => {
     }
   };
   
+  const loadMatch = async (matchId: string) => {
+    try {
+      setLoading(true);
+      const matchData = id ? await matchesService.getMatchById(matchId) : null;
+      
+      if (matchData) {
+        setMatch(matchData);
+        
+        const matchDate = matchData.matchDate instanceof Date 
+          ? matchData.matchDate 
+          : new Date(matchData.matchDate);
+        
+        setFormData({
+          seasonId: matchData.seasonId || '',
+          divisionId: matchData.divisionId || '',
+          homeTeamId: matchData.homeTeamId || '',
+          awayTeamId: matchData.awayTeamId || '',
+          refereeId: matchData.refereeId || '',
+          fieldId: matchData.fieldId || '',
+          matchDate: matchDate.toISOString().split('T')[0],
+          matchTime: matchData.matchTime || '',
+          notes: matchData.notes || '',
+          status: matchData.status || 'scheduled',
+          homeScore: matchData.homeScore || 0,
+          awayScore: matchData.awayScore || 0,
+          winner: matchData.winner || '',
+          isPlayoff: matchData.isPlayoff || false,
+          playoffStage: matchData.playoffStage || '',
+          round: matchData.round || 1
+        });
+        
+        // Cargar datos relacionados
+        if (matchData.seasonId) {
+          await loadDivisions(matchData.seasonId);
+          await loadReferees(matchData.seasonId);
+        }
+        if (matchData.divisionId) {
+          await loadTeams(matchData.divisionId);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading match:', error);
+      setNotification({
+        type: 'error',
+        message: 'Error al cargar el partido'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   const loadDivisions = async (seasonId: string) => {
     try {
       const divisionsData = await divisionsService.getDivisionsBySeason(seasonId);
       setDivisions(divisionsData);
-      
-      if (divisionsData.length > 0) {
-        setSelectedDivision(divisionsData[0].id);
-      }
     } catch (error) {
       console.error('Error loading divisions:', error);
     }
@@ -102,24 +172,6 @@ const Matches: React.FC = () => {
     }
   };
   
-  const loadMatches = async (seasonId: string) => {
-    try {
-      const matchesData = await matchesService.getMatches(seasonId);
-      setMatches(matchesData);
-    } catch (error) {
-      console.error('Error loading matches:', error);
-    }
-  };
-  
-  const loadMatchesByDivision = async (divisionId: string) => {
-    try {
-      const matchesData = await matchesService.getMatchesByDivision(divisionId);
-      setMatches(matchesData);
-    } catch (error) {
-      console.error('Error loading matches by division:', error);
-    }
-  };
-  
   const loadReferees = async (seasonId: string) => {
     try {
       const refereesData = await refereesService.getReferees(seasonId);
@@ -129,144 +181,197 @@ const Matches: React.FC = () => {
     }
   };
   
-  // Filtrar partidos
-  const filteredMatches = useMemo(() => {
-    return matches.filter(match => {
-      // Filtrar por estado
-      if (selectedStatus) {
-        let matchStatus = '';
-        switch (match.status) {
-          case 'scheduled': matchStatus = 'programado'; break;
-          case 'in_progress': matchStatus = 'en_curso'; break;
-          case 'completed': matchStatus = 'finalizado'; break;
-          case 'cancelled': matchStatus = 'cancelado'; break;
-          case 'postponed': matchStatus = 'suspendido'; break;
-          default: matchStatus = '';
-        }
-        
-        if (matchStatus !== selectedStatus) {
-          return false;
-        }
+  const loadFields = async () => {
+    try {
+      const fieldsData = await fieldsService.getFields();
+      setFields(fieldsData);
+    } catch (error) {
+      console.error('Error loading fields:', error);
+    }
+  };
+  
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormData(prev => ({ ...prev, [name]: checked }));
+    } else if (type === 'number') {
+      setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+      
+      // Cargar datos cuando se selecciona temporada
+      if (name === 'seasonId' && value) {
+        loadDivisions(value);
+        loadReferees(value);
       }
       
-      // Filtrar por búsqueda
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        return (
-          match.homeTeam?.name.toLowerCase().includes(term) ||
-          match.awayTeam?.name.toLowerCase().includes(term) ||
-          match.refereeName?.toLowerCase().includes(term) ||
-          match.notes?.toLowerCase().includes(term)
-        );
+      // Cargar equipos cuando se selecciona división
+      if (name === 'divisionId' && value) {
+        loadTeams(value);
       }
-      
-      return true;
-    });
-  }, [matches, selectedStatus, searchTerm]);
+    }
+  };
   
-  // Agrupar partidos por ronda
-  const matchesByRound = useMemo(() => {
-    const groups: Record<number, Match[]> = {};
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    filteredMatches.forEach(match => {
-      if (!groups[match.round]) {
-        groups[match.round] = [];
-      }
-      groups[match.round].push(match);
-    });
-    
-    // Ordenar rondas
-    return Object.entries(groups)
-      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-      .reduce((acc, [round, matches]) => {
-        acc[parseInt(round)] = matches;
-        return acc;
-      }, {} as Record<number, Match[]>);
-  }, [filteredMatches]);
-  
-  // Manejar generación de calendario
-  const handleGenerateCalendar = async () => {
-    if (!selectedSeason || !selectedDivision || teams.length < 2) {
+    // Validar campos requeridos
+    if (!formData.seasonId || !formData.divisionId || !formData.homeTeamId || !formData.awayTeamId || !formData.matchDate || !formData.matchTime) {
       setNotification({
         type: 'error',
-        message: 'Se necesitan al menos 2 equipos para generar el calendario'
+        message: 'Por favor complete todos los campos requeridos (*)'
+      });
+      return;
+    }
+    
+    // Validar que no sean el mismo equipo
+    if (formData.homeTeamId === formData.awayTeamId) {
+      setNotification({
+        type: 'error',
+        message: 'El equipo local y visitante no pueden ser el mismo'
       });
       return;
     }
     
     try {
-      setLoading(true);
-      await matchesService.generateSeasonCalendar(selectedSeason, selectedDivision, teams);
+      setSaving(true);
       
-      setNotification({
-        type: 'success',
-        message: 'Calendario generado exitosamente'
-      });
+      // Preparar datos del partido - SIN campos undefined
+      const matchDate = formData.matchDate ? new Date(formData.matchDate) : new Date();
       
-      // Recargar partidos
-      loadMatchesByDivision(selectedDivision);
+      // Crear objeto con solo los campos definidos
+      const matchData: Omit<Match, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'> = {
+        seasonId: formData.seasonId,
+        divisionId: formData.divisionId,
+        categoryId: '', // Añadir si es necesario
+        fieldId: formData.fieldId || '',
+        homeTeamId: formData.homeTeamId,
+        awayTeamId: formData.awayTeamId,
+        matchDate,
+        matchTime: formData.matchTime,
+        round: formData.round,
+        isPlayoff: formData.isPlayoff,
+        status: formData.status,
+        notes: formData.notes || ''
+      };
+      
+      // Añadir campos opcionales solo si tienen valor
+      if (formData.refereeId) matchData.refereeId = formData.refereeId;
+      if (formData.playoffStage) matchData.playoffStage = formData.playoffStage;
+      
+      // Si estamos en modo resultado, añadir puntuación
+      if (mode === 'result' && id) {
+        matchData.homeScore = formData.homeScore;
+        matchData.awayScore = formData.awayScore;
+        matchData.winner = formData.winner || undefined;
+        matchData.status = 'completed';
+      }
+      
+      if (mode === 'create') {
+        // CORREGIDO: Asegurar que todos los campos requeridos están presentes
+        const completeMatchData = {
+          ...matchData,
+          createdAt: new Date(),
+          createdBy: user?.uid || 'system',
+          updatedAt: new Date(),
+          updatedBy: user?.uid || 'system'
+        } as Omit<Match, 'id'>;
+        
+        await matchesService.createMatch(completeMatchData);
+        setNotification({
+          type: 'success',
+          message: 'Partido creado exitosamente'
+        });
+        navigate('/partidos');
+        
+      } else if (mode === 'edit' && id) {
+        const updateData = {
+          ...matchData,
+          updatedAt: new Date(),
+          updatedBy: user?.uid || 'system'
+        };
+        
+        await matchesService.updateMatch(id, updateData);
+        setNotification({
+          type: 'success',
+          message: 'Partido actualizado exitosamente'
+        });
+        navigate(`/partidos/${id}`);
+        
+      } else if (mode === 'result' && id) {
+        const resultData = {
+          homeScore: formData.homeScore,
+          awayScore: formData.awayScore,
+          winner: formData.winner || undefined,
+          status: 'completed' as const,
+          notes: formData.notes,
+          updatedAt: new Date(),
+          updatedBy: user?.uid || 'system'
+        };
+        
+        await matchesService.updateMatch(id, resultData);
+        setNotification({
+          type: 'success',
+          message: 'Resultado registrado exitosamente'
+        });
+        navigate(`/partidos/${id}`);
+      }
     } catch (error) {
-      console.error('Error generating calendar:', error);
+      console.error('Error saving match:', error);
       setNotification({
         type: 'error',
-        message: 'Error al generar el calendario'
+        message: 'Error al guardar el partido'
       });
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
   
-  // Manejar eliminación de partido
-  const handleDeleteMatch = async (matchId: string) => {
-    if (!confirm('¿Estás seguro de eliminar este partido?')) return;
-    
-    try {
-      await matchesService.deleteMatch(matchId);
-      
-      // Actualizar lista
-      setMatches(matches.filter(match => match.id !== matchId));
-      
-      setNotification({
-        type: 'success',
-        message: 'Partido eliminado exitosamente'
-      });
-    } catch (error) {
-      console.error('Error deleting match:', error);
-      setNotification({
-        type: 'error',
-        message: 'Error al eliminar el partido'
-      });
+  const getTitle = () => {
+    switch (mode) {
+      case 'create': return 'Crear Nuevo Partido';
+      case 'edit': return 'Editar Partido';
+      case 'result': return 'Registrar Resultado';
+      default: return 'Detalles del Partido';
     }
   };
   
-  // Obtener color según estado
-  const getStatusColor = (status: Match['status']) => {
-    switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'in_progress': return 'bg-yellow-100 text-yellow-800';
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'postponed': return 'bg-red-100 text-red-800';
-      case 'cancelled': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-  
-  // Traducir estado al español
-  const translateStatus = (status: Match['status']) => {
-    switch (status) {
-      case 'scheduled': return 'Programado';
-      case 'in_progress': return 'En curso';
-      case 'completed': return 'Finalizado';
-      case 'postponed': return 'Suspendido';
-      case 'cancelled': return 'Cancelado';
-      default: return status;
-    }
-  };
-  
-  // Formatear fecha
   const formatDate = (date: Date | string) => {
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return format(dateObj, "dd 'de' MMMM 'de' yyyy", { locale: es });
+    try {
+      const dateObj = date instanceof Date ? date : new Date(date);
+      if (isNaN(dateObj.getTime())) return 'Fecha no válida';
+      return format(dateObj, "dd 'de' MMMM 'de' yyyy", { locale: es });
+    } catch {
+      return 'Fecha no válida';
+    }
+  };
+  
+  // Función para obtener nombre del campo
+  const getFieldName = (fieldId?: string) => {
+    if (!fieldId) return 'No asignado';
+    const field = fields.find(f => f.id === fieldId);
+    return field?.name || 'Campo no encontrado';
+  };
+  
+  // Función para obtener nombre completo del árbitro
+  const getRefereeFullName = (refereeId?: string) => {
+    if (!refereeId) return 'No asignado';
+    const referee = referees.find(r => r.id === refereeId);
+    return referee?.fullName || `${referee?.firstName || ''} ${referee?.lastName || ''}`.trim() || 'Árbitro no encontrado';
+  };
+  
+  // Obtener equipo por ID
+  const getTeamById = (teamId?: string) => {
+    if (!teamId) return null;
+    return teams.find(team => team.id === teamId);
+  };
+  
+  // Obtener nombre del equipo
+  const getTeamName = (teamId?: string) => {
+    const team = getTeamById(teamId);
+    return team?.name || 'Equipo no encontrado';
   };
   
   if (loading) return <LoadingSpinner />;
@@ -274,8 +379,26 @@ const Matches: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Partidos</h1>
-        <p className="text-gray-600">Gestión de partidos y calendario de la liga</p>
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{getTitle()}</h1>
+            <p className="text-gray-600">
+              {mode === 'view' ? 'Información detallada del partido' : 
+               mode === 'result' ? 'Registra el resultado del partido' :
+               'Completa el formulario para gestionar el partido'}
+            </p>
+          </div>
+          
+          <button
+            onClick={() => navigate('/partidos')}
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 flex items-center space-x-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span>Volver a Partidos</span>
+          </button>
+        </div>
       </div>
       
       {/* Notificación */}
@@ -287,310 +410,547 @@ const Matches: React.FC = () => {
         />
       )}
       
-      {/* Filtros y controles */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          {/* Selector de temporada */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Temporada
-            </label>
-            <select
-              value={selectedSeason}
-              onChange={(e) => setSelectedSeason(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Seleccionar temporada</option>
-              {seasons.map(season => (
-                <option key={season.id} value={season.id}>
-                  {season.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Selector de división */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              División
-            </label>
-            <select
-              value={selectedDivision}
-              onChange={(e) => setSelectedDivision(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={!selectedSeason}
-            >
-              <option value="">Seleccionar división</option>
-              {divisions.map(division => (
-                <option key={division.id} value={division.id}>
-                  {division.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Selector de estado */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Estado
-            </label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Todos los estados</option>
-              <option value="programado">Programado</option>
-              <option value="en_curso">En curso</option>
-              <option value="finalizado">Finalizado</option>
-              <option value="suspendido">Suspendido</option>
-              <option value="cancelado">Cancelado</option>
-            </select>
-          </div>
-          
-          {/* Búsqueda */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Buscar
-            </label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por equipo o árbitro..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-        
-        {/* Botones de acción */}
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => navigate('/partidos/nuevo')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            Nuevo Partido
-          </button>
-          
-          <button
-            onClick={() => navigate('/partidos/generar-calendario')}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-          >
-            Generar Calendario
-          </button>
-          
-          <button
-            onClick={handleGenerateCalendar}
-            disabled={!selectedDivision || teams.length < 2}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Generar Automático
-          </button>
-          
-          <button
-            onClick={() => navigate('/calendario')}
-            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-          >
-            Ver Calendario
-          </button>
-          
-          <button
-            onClick={() => navigate('/arbitros')}
-            className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-          >
-            Gestionar Árbitros
-          </button>
-        </div>
-      </div>
-      
-      {/* Lista de partidos por ronda */}
-      {Object.entries(matchesByRound).length > 0 ? (
-        <div className="space-y-8">
-          {Object.entries(matchesByRound).map(([round, roundMatches]) => (
-            <div key={round} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4">
-                <h2 className="text-xl font-bold text-white">
-                  Jornada {round} - {roundMatches.length} Partido{roundMatches.length !== 1 ? 's' : ''}
-                </h2>
+      <div className="bg-white rounded-lg shadow-md p-6">
+        {mode === 'view' && match ? (
+          // Vista de detalles
+          <div className="space-y-6">
+            {/* Información básica */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Información del Partido</h3>
+                <dl className="space-y-3">
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Estado</dt>
+                    <dd className="mt-1">
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        match.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                        match.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                        match.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        match.status === 'postponed' ? 'bg-orange-100 text-orange-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {match.status === 'scheduled' ? 'Programado' :
+                         match.status === 'in_progress' ? 'En curso' :
+                         match.status === 'completed' ? 'Finalizado' :
+                         match.status === 'postponed' ? 'Suspendido' : 'Cancelado'}
+                      </span>
+                    </dd>
+                  </div>
+                  
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Fecha y Hora</dt>
+                    <dd className="mt-1 text-gray-900">{formatDate(match.matchDate)} - {match.matchTime}</dd>
+                  </div>
+                  
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Ronda</dt>
+                    <dd className="mt-1 text-gray-900">Jornada {match.round}</dd>
+                  </div>
+                  
+                  {match.isPlayoff && match.playoffStage && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Etapa de Playoff</dt>
+                      <dd className="mt-1 text-gray-900">
+                        {match.playoffStage === 'quarterfinals' ? 'Cuartos de final' :
+                         match.playoffStage === 'semifinals' ? 'Semifinal' :
+                         match.playoffStage === 'final' ? 'Final' : 'Tercer lugar'}
+                      </dd>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Campo</dt>
+                    <dd className="mt-1 text-gray-900">{getFieldName(match.fieldId)}</dd>
+                  </div>
+                </dl>
               </div>
               
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {roundMatches.map(match => (
-                    <div
-                      key={match.id}
-                      className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300"
-                    >
-                      {/* Encabezado del partido */}
-                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                        <div className="flex justify-between items-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(match.status)}`}>
-                            {translateStatus(match.status).toUpperCase()}
-                          </span>
-                          <span className="text-sm text-gray-600">
-                            {formatDate(match.matchDate)} - {match.matchTime}
-                          </span>
-                        </div>
-                        
-                        {match.isPlayoff && match.playoffStage && (
-                          <div className="mt-2">
-                            <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded">
-                              PLAYOFF: {match.playoffStage.toUpperCase()}
-                            </span>
-                          </div>
-                        )}
+              {/* Equipos */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Equipos</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full font-bold">
+                        {getTeamName(match.homeTeamId)?.charAt(0) || 'L'}
                       </div>
-                      
-                      {/* Contenido del partido */}
-                      <div className="p-4">
-                        {/* Equipos y resultado */}
-                        <div className="mb-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center space-x-3">
-                              <div 
-                                className="w-6 h-6 rounded-full" 
-                                style={{ backgroundColor: match.homeTeam?.primaryColor || '#3B82F6' }}
-                              />
-                              <div>
-                                <div className="font-medium text-gray-900">{match.homeTeam?.name || 'Equipo local'}</div>
-                                <div className="text-sm text-gray-600">
-                                  {match.status === 'completed' ? `Goles: ${match.homeScore || 0}` : 'Local'}
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="text-2xl font-bold text-gray-900">VS</div>
-                            
-                            <div className="flex items-center space-x-3">
-                              <div>
-                                <div className="font-medium text-gray-900 text-right">{match.awayTeam?.name || 'Equipo visitante'}</div>
-                                <div className="text-sm text-gray-600 text-right">
-                                  {match.status === 'completed' ? `Goles: ${match.awayScore || 0}` : 'Visitante'}
-                                </div>
-                              </div>
-                              <div 
-                                className="w-6 h-6 rounded-full" 
-                                style={{ backgroundColor: match.awayTeam?.primaryColor || '#EF4444' }}
-                              />
-                            </div>
-                          </div>
-                          
-                          {/* Resultado final */}
-                          {match.status === 'completed' && (
-                            <div className="text-center mt-2">
-                              <div className="inline-block bg-gray-100 px-4 py-2 rounded-lg">
-                                <span className="text-lg font-bold text-gray-900">
-                                  {match.homeScore || 0} - {match.awayScore || 0}
-                                </span>
-                                {match.winner && (
-                                  <div className="text-sm text-gray-600 mt-1">
-                                    Ganador: {match.winner === 'home' ? match.homeTeam?.name : match.awayTeam?.name}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Información adicional */}
-                        <div className="space-y-2 text-sm text-gray-600">
-                          {match.refereeName && (
-                            <div className="flex items-center">
-                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                              </svg>
-                              Árbitro: {match.refereeName}
-                            </div>
-                          )}
-                          
-                          {match.notes && (
-                            <div className="flex items-start">
-                              <svg className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                              </svg>
-                              <span className="truncate">{match.notes}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Acciones */}
-                      <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-                        <div className="flex justify-between">
-                          <Link
-                            to={`/partidos/${match.id}`}
-                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                          >
-                            Ver Detalles
-                          </Link>
-                          
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => navigate(`/partidos/${match.id}/editar`)}
-                              className="text-yellow-600 hover:text-yellow-800 text-sm"
-                            >
-                              Editar
-                            </button>
-                            
-                            {match.status === 'scheduled' && (
-                              <button
-                                onClick={() => navigate(`/partidos/${match.id}/resultado`)}
-                                className="text-green-600 hover:text-green-800 text-sm"
-                              >
-                                Registrar Resultado
-                              </button>
-                            )}
-                            
-                            <button
-                              onClick={() => handleDeleteMatch(match.id)}
-                              className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                              Eliminar
-                            </button>
-                          </div>
-                        </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{getTeamName(match.homeTeamId)}</div>
+                        <div className="text-sm text-gray-600">Local</div>
                       </div>
                     </div>
-                  ))}
+                    <div className="text-3xl font-bold text-gray-900">
+                      {match.status === 'completed' ? match.homeScore || 0 : '-'}
+                    </div>
+                  </div>
+                  
+                  <div className="text-center py-2">
+                    <span className="text-gray-500 font-medium">VS</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div className="text-3xl font-bold text-gray-900">
+                      {match.status === 'completed' ? match.awayScore || 0 : '-'}
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <div>
+                        <div className="font-medium text-gray-900 text-right">{getTeamName(match.awayTeamId)}</div>
+                        <div className="text-sm text-gray-600 text-right">Visitante</div>
+                      </div>
+                      <div className="w-10 h-10 flex items-center justify-center bg-red-100 text-red-800 rounded-full font-bold">
+                        {getTeamName(match.awayTeamId)?.charAt(0) || 'V'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {match.status === 'completed' && match.winner && (
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="text-center font-medium text-green-800">
+                        Ganador: {match.winner === 'home' ? getTeamName(match.homeTeamId) : getTeamName(match.awayTeamId)}
+                      </div>
+                      {match.winner === 'draw' && (
+                        <div className="text-center text-sm text-green-600 mt-1">Empate</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center">
-          <div className="mx-auto w-24 h-24 text-gray-400 mb-6">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
+            
+            {/* Información adicional */}
+            <div className="border-t border-gray-200 pt-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Información Adicional</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Árbitro</dt>
+                  <dd className="mt-1 text-gray-900">{getRefereeFullName(match.refereeId)}</dd>
+                </div>
+                
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Notas</dt>
+                  <dd className="mt-1 text-gray-900">{match.notes || 'Sin notas'}</dd>
+                </div>
+                
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Creado</dt>
+                  <dd className="mt-1 text-gray-900">
+                    {match.createdAt ? formatDate(match.createdAt) : 'No disponible'}
+                  </dd>
+                </div>
+              </div>
+            </div>
+            
+            {/* Acciones */}
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => navigate(`/partidos/${id}/editar`)}
+                  className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  <span>Editar</span>
+                </button>
+                
+                {match.status === 'scheduled' && (
+                  <button
+                    onClick={() => navigate(`/partidos/${id}/resultado`)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center space-x-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Registrar Resultado</span>
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => navigate('/partidos')}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  <span>Volver</span>
+                </button>
+              </div>
+            </div>
           </div>
-          <h3 className="text-xl font-medium text-gray-900 mb-2">No hay partidos programados</h3>
-          <p className="text-gray-600 mb-6">
-            {selectedDivision 
-              ? 'Comienza generando el calendario o creando partidos manualmente.'
-              : 'Selecciona una temporada y división para ver los partidos.'
-            }
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <button
-              onClick={() => navigate('/partidos/nuevo')}
-              className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Crear Partido Manual
-            </button>
-            {selectedDivision && teams.length >= 2 && (
+        ) : (
+          // Formulario para crear/editar/resultado
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Temporada */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Temporada *
+                </label>
+                <select
+                  name="seasonId"
+                  value={formData.seasonId}
+                  onChange={handleChange}
+                  required
+                  disabled={mode === 'result'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">Seleccionar temporada</option>
+                  {seasons.map(season => (
+                    <option key={season.id} value={season.id}>
+                      {season.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* División */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  División *
+                </label>
+                <select
+                  name="divisionId"
+                  value={formData.divisionId}
+                  onChange={handleChange}
+                  required
+                  disabled={mode === 'result' || !formData.seasonId}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">Seleccionar división</option>
+                  {divisions.map(division => (
+                    <option key={division.id} value={division.id}>
+                      {division.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Equipo Local */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Equipo Local *
+                </label>
+                <select
+                  name="homeTeamId"
+                  value={formData.homeTeamId}
+                  onChange={handleChange}
+                  required
+                  disabled={mode === 'result' || !formData.divisionId}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">Seleccionar equipo local</option>
+                  {teams.map(team => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Equipo Visitante */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Equipo Visitante *
+                </label>
+                <select
+                  name="awayTeamId"
+                  value={formData.awayTeamId}
+                  onChange={handleChange}
+                  required
+                  disabled={mode === 'result' || !formData.divisionId}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">Seleccionar equipo visitante</option>
+                  {teams
+                    .filter(team => team.id !== formData.homeTeamId)
+                    .map(team => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              
+              {/* Fecha y Hora */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fecha *
+                </label>
+                <input
+                  type="date"
+                  name="matchDate"
+                  value={formData.matchDate}
+                  onChange={handleChange}
+                  required
+                  disabled={mode === 'result'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Hora *
+                </label>
+                <input
+                  type="time"
+                  name="matchTime"
+                  value={formData.matchTime}
+                  onChange={handleChange}
+                  required
+                  disabled={mode === 'result'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                />
+              </div>
+              
+              {/* Árbitro */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Árbitro
+                </label>
+                <select
+                  name="refereeId"
+                  value={formData.refereeId}
+                  onChange={handleChange}
+                  disabled={mode === 'result' || !formData.seasonId}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">Seleccionar árbitro</option>
+                  {referees.map(referee => (
+                    <option key={referee.id} value={referee.id}>
+                      {referee.fullName || `${referee.firstName} ${referee.lastName}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Campo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Campo
+                </label>
+                <select
+                  name="fieldId"
+                  value={formData.fieldId}
+                  onChange={handleChange}
+                  disabled={mode === 'result'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">Seleccionar campo</option>
+                  {fields.map(field => (
+                    <option key={field.id} value={field.id}>
+                      {field.name} ({field.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Ronda */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ronda
+                </label>
+                <input
+                  type="number"
+                  name="round"
+                  value={formData.round}
+                  onChange={handleChange}
+                  min="1"
+                  disabled={mode === 'result'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                />
+              </div>
+              
+              {/* Playoff */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  name="isPlayoff"
+                  checked={formData.isPlayoff}
+                  onChange={handleChange}
+                  disabled={mode === 'result'}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:bg-gray-100"
+                />
+                <label className="block text-sm text-gray-700">
+                  Es partido de playoff
+                </label>
+              </div>
+              
+              {formData.isPlayoff && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Etapa de Playoff
+                  </label>
+                  <select
+                    name="playoffStage"
+                    value={formData.playoffStage}
+                    onChange={handleChange}
+                    disabled={mode === 'result'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                  >
+                    <option value="">Seleccionar etapa</option>
+                    <option value="quarterfinals">Cuartos de final</option>
+                    <option value="semifinals">Semifinal</option>
+                    <option value="final">Final</option>
+                    <option value="third_place">Tercer lugar</option>
+                  </select>
+                </div>
+              )}
+              
+              {/* Estado (solo en crear/editar) */}
+              {mode !== 'result' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Estado
+                  </label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="scheduled">Programado</option>
+                    <option value="in_progress">En curso</option>
+                    <option value="postponed">Suspendido</option>
+                    <option value="cancelled">Cancelado</option>
+                  </select>
+                </div>
+              )}
+              
+              {/* Resultados (solo en resultado) */}
+              {mode === 'result' && (
+                <>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <label className="block text-sm font-medium text-blue-700 mb-2">
+                      Goles Local
+                    </label>
+                    <input
+                      type="number"
+                      name="homeScore"
+                      value={formData.homeScore}
+                      onChange={handleChange}
+                      min="0"
+                      className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    />
+                  </div>
+                  
+                  <div className="bg-red-50 p-4 rounded-lg">
+                    <label className="block text-sm font-medium text-red-700 mb-2">
+                      Goles Visitante
+                    </label>
+                    <input
+                      type="number"
+                      name="awayScore"
+                      value={formData.awayScore}
+                      onChange={handleChange}
+                      min="0"
+                      className="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+                    />
+                  </div>
+                  
+                  <div className="col-span-2 bg-green-50 p-4 rounded-lg">
+                    <label className="block text-sm font-medium text-green-700 mb-2">
+                      Ganador
+                    </label>
+                    <select
+                      name="winner"
+                      value={formData.winner}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    >
+                      <option value="">Sin ganador (empate)</option>
+                      <option value="home">Local</option>
+                      <option value="away">Visitante</option>
+                      <option value="draw">Empate</option>
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            {/* Notas */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notas
+              </label>
+              <textarea
+                name="notes"
+                value={formData.notes}
+                onChange={handleChange}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Notas adicionales sobre el partido..."
+              />
+            </div>
+            
+            {/* Botones de acción */}
+            <div className="flex space-x-3 pt-6 border-t border-gray-200">
               <button
-                onClick={handleGenerateCalendar}
-                className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                type="submit"
+                disabled={saving}
+                className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               >
-                Generar Calendario Automático
+                {saving ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Guardando...</span>
+                  </>
+                ) : mode === 'create' ? (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>Crear Partido</span>
+                  </>
+                ) : mode === 'edit' ? (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Actualizar Partido</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Registrar Resultado</span>
+                  </>
+                )}
               </button>
-            )}
-          </div>
-        </div>
-      )}
+              
+              <button
+                type="button"
+                onClick={() => navigate('/partidos')}
+                className="px-6 py-3 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 flex items-center space-x-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>Cancelar</span>
+              </button>
+              
+              {mode !== 'create' && id && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/partidos/${id}`)}
+                  className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  <span>Ver Detalles</span>
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 };
 
-export default Matches;
+export default MatchDetail;

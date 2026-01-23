@@ -1,3 +1,4 @@
+// src/App.tsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -154,25 +155,14 @@ function App() {
               </RoleBasedRoute>
             </PrivateRoute>
           } />
-
           
-<Route path="/categorias" element={
-  <PrivateRoute>
-    <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
-      <CategoriesDetail />  // ← Cambia Categories por CategoriesDetail
-    </RoleBasedRoute>
-  </PrivateRoute>
-} />
-
-// Y agrega una nueva ruta para categorías por división:
-<Route path="/divisiones/:divisionId/categorias" element={
-  <PrivateRoute>
-    <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
-      <Categories />  
-    </RoleBasedRoute>
-  </PrivateRoute>
-} />
-
+          <Route path="/divisiones/:divisionId/categorias" element={
+            <PrivateRoute>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
+                <Categories />
+              </RoleBasedRoute>
+            </PrivateRoute>
+          } />
           
           <Route path="/campos" element={
             <PrivateRoute>
@@ -216,10 +206,11 @@ function App() {
             </PrivateRoute>
           } />
           
+          {/* CAMBIA ESTO: Quita la prop mode */}
           <Route path="/partidos/nuevo" element={
             <PrivateRoute>
               <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
-                <MatchDetail mode="create" />
+                <MatchDetail />
               </RoleBasedRoute>
             </PrivateRoute>
           } />
@@ -227,7 +218,7 @@ function App() {
           <Route path="/partidos/:id" element={
             <PrivateRoute>
               <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro', 'capitan', 'jugador']}>
-                <MatchDetail mode="view" />
+                <MatchDetail />
               </RoleBasedRoute>
             </PrivateRoute>
           } />
@@ -235,7 +226,7 @@ function App() {
           <Route path="/partidos/:id/editar" element={
             <PrivateRoute>
               <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
-                <MatchDetail mode="edit" />
+                <MatchDetail />
               </RoleBasedRoute>
             </PrivateRoute>
           } />
@@ -243,7 +234,7 @@ function App() {
           <Route path="/partidos/:id/resultado" element={
             <PrivateRoute>
               <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
-                <MatchDetail mode="result" />
+                <MatchDetail />
               </RoleBasedRoute>
             </PrivateRoute>
           } />
@@ -256,33 +247,30 @@ function App() {
             </PrivateRoute>
           } />
           
-          // Agregar después de /calendario
-<Route path="/partidos/generar-calendario" element={
-  <PrivateRoute>
-    <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
-      <MatchSchedulerPage />
-    </RoleBasedRoute>
-  </PrivateRoute>
-} />
-
-
-
+          <Route path="/partidos/generar-calendario" element={
+            <PrivateRoute>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
+                <MatchSchedulerPage />
+              </RoleBasedRoute>
+            </PrivateRoute>
+          } />
+          
           <Route path="/test/standings" element={
-  <PrivateRoute>
-    <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro']}>
-      <TestStandings />
-    </RoleBasedRoute>
-  </PrivateRoute>
-} />
-
-<Route path="/test/livescore" element={
-  <PrivateRoute>
-    <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
-      <TestLiveScore />
-    </RoleBasedRoute>
-  </PrivateRoute>
-} />
-
+            <PrivateRoute>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro']}>
+                <TestStandings />
+              </RoleBasedRoute>
+            </PrivateRoute>
+          } />
+          
+          <Route path="/test/livescore" element={
+            <PrivateRoute>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
+                <TestLiveScore />
+              </RoleBasedRoute>
+            </PrivateRoute>
+          } />
+          
           {/* Árbitros */}
           <Route path="/arbitros" element={
             <PrivateRoute>
