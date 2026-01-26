@@ -129,6 +129,28 @@ const Matches: React.FC = () => {
     }
   };
   
+  // Helper para obtener nombre del equipo
+  const getTeamDisplayName = (match: Match, teamType: 'home' | 'away'): string => {
+    if (teamType === 'home' && match.homeTeam?.name) return match.homeTeam.name;
+    if (teamType === 'away' && match.awayTeam?.name) return match.awayTeam.name;
+    
+    const teamId = teamType === 'home' ? match.homeTeamId : match.awayTeamId;
+    const foundTeam = teams.find(t => t.id === teamId);
+    
+    return foundTeam?.name || (teamType === 'home' ? 'Equipo local' : 'Equipo visitante');
+  };
+  
+  // Helper para obtener color del equipo
+  const getTeamPrimaryColor = (match: Match, teamType: 'home' | 'away'): string => {
+    if (teamType === 'home' && match.homeTeam?.primaryColor) return match.homeTeam.primaryColor;
+    if (teamType === 'away' && match.awayTeam?.primaryColor) return match.awayTeam.primaryColor;
+    
+    const teamId = teamType === 'home' ? match.homeTeamId : match.awayTeamId;
+    const foundTeam = teams.find(t => t.id === teamId);
+    
+    return foundTeam?.primaryColor || (teamType === 'home' ? '#3B82F6' : '#EF4444');
+  };
+  
   // Filtrar partidos
   const filteredMatches = useMemo(() => {
     return matches.filter(match => {
@@ -152,9 +174,12 @@ const Matches: React.FC = () => {
       // Filtrar por búsqueda
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
+        const homeName = getTeamDisplayName(match, 'home').toLowerCase();
+        const awayName = getTeamDisplayName(match, 'away').toLowerCase();
+        
         return (
-          match.homeTeam?.name.toLowerCase().includes(term) ||
-          match.awayTeam?.name.toLowerCase().includes(term) ||
+          homeName.includes(term) ||
+          awayName.includes(term) ||
           match.refereeName?.toLowerCase().includes(term) ||
           match.notes?.toLowerCase().includes(term)
         );
@@ -162,7 +187,7 @@ const Matches: React.FC = () => {
       
       return true;
     });
-  }, [matches, selectedStatus, searchTerm]);
+  }, [matches, selectedStatus, searchTerm, teams]);
   
   // Agrupar partidos por ronda
   const matchesByRound = useMemo(() => {
@@ -245,7 +270,7 @@ const Matches: React.FC = () => {
       case 'scheduled': return 'bg-blue-100 text-blue-800';
       case 'in_progress': return 'bg-yellow-100 text-yellow-800';
       case 'completed': return 'bg-green-100 text-green-800';
-      case 'postponed': return 'bg-red-100 text-red-800';
+      case 'postponed': return 'bg-orange-100 text-orange-800';
       case 'cancelled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -265,8 +290,13 @@ const Matches: React.FC = () => {
   
   // Formatear fecha
   const formatDate = (date: Date | string) => {
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return format(dateObj, "dd 'de' MMMM 'de' yyyy", { locale: es });
+    try {
+      const dateObj = date instanceof Date ? date : new Date(date);
+      if (isNaN(dateObj.getTime())) return 'Fecha inválida';
+      return format(dateObj, "dd 'de' MMMM 'de' yyyy", { locale: es });
+    } catch {
+      return 'Fecha inválida';
+    }
   };
   
   if (loading) return <LoadingSpinner />;
@@ -399,7 +429,7 @@ const Matches: React.FC = () => {
             disabled={!selectedDivision || teams.length < 2}
             className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Generar Automático
+            Generar Automático {teams.length > 0 && `(${teams.length} equipos)`}
           </button>
           
           <button
@@ -464,10 +494,12 @@ const Matches: React.FC = () => {
                             <div className="flex items-center space-x-3">
                               <div 
                                 className="w-6 h-6 rounded-full" 
-                                style={{ backgroundColor: match.homeTeam?.primaryColor || '#3B82F6' }}
+                                style={{ backgroundColor: getTeamPrimaryColor(match, 'home') }}
                               />
                               <div>
-                                <div className="font-medium text-gray-900">{match.homeTeam?.name || 'Equipo local'}</div>
+                                <div className="font-medium text-gray-900">
+                                  {getTeamDisplayName(match, 'home')}
+                                </div>
                                 <div className="text-sm text-gray-600">
                                   {match.status === 'completed' ? `Goles: ${match.homeScore || 0}` : 'Local'}
                                 </div>
@@ -478,14 +510,16 @@ const Matches: React.FC = () => {
                             
                             <div className="flex items-center space-x-3">
                               <div>
-                                <div className="font-medium text-gray-900 text-right">{match.awayTeam?.name || 'Equipo visitante'}</div>
+                                <div className="font-medium text-gray-900 text-right">
+                                  {getTeamDisplayName(match, 'away')}
+                                </div>
                                 <div className="text-sm text-gray-600 text-right">
                                   {match.status === 'completed' ? `Goles: ${match.awayScore || 0}` : 'Visitante'}
                                 </div>
                               </div>
                               <div 
                                 className="w-6 h-6 rounded-full" 
-                                style={{ backgroundColor: match.awayTeam?.primaryColor || '#EF4444' }}
+                                style={{ backgroundColor: getTeamPrimaryColor(match, 'away') }}
                               />
                             </div>
                           </div>
@@ -497,9 +531,14 @@ const Matches: React.FC = () => {
                                 <span className="text-lg font-bold text-gray-900">
                                   {match.homeScore || 0} - {match.awayScore || 0}
                                 </span>
-                                {match.winner && (
+                                {match.winner && match.winner !== 'draw' && (
                                   <div className="text-sm text-gray-600 mt-1">
-                                    Ganador: {match.winner === 'home' ? match.homeTeam?.name : match.awayTeam?.name}
+                                    Ganador: {match.winner === 'home' ? getTeamDisplayName(match, 'home') : getTeamDisplayName(match, 'away')}
+                                  </div>
+                                )}
+                                {match.winner === 'draw' && (
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    Empate
                                   </div>
                                 )}
                               </div>

@@ -123,20 +123,20 @@ const Dashboard: React.FC = () => {
 {
   titulo: 'Tablas de Posiciones',
   descripcion: 'Consulta las tablas de posiciones de la liga',
-  icono: TrophyIcon, // Puedes usar un icono diferente si prefieres
+  icono: TrophyIcon, 
   color: 'bg-yellow-500',
-  ruta: '/test/standings',
+  ruta: '/tabla-posiciones',
   rolesPermitidos: ['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro'],
-  etiqueta: 'Prueba'
+  etiqueta: 'Live'
 },
 {
   titulo: 'Marcador en Vivo',
   descripcion: 'Sistema para árbitros - registro en tiempo real',
   icono: TrophyIcon, // O usa ClockIcon
   color: 'bg-green-500',
-  ruta: '/test/livescore',
+  ruta: '/marcador-en-vivo',
   rolesPermitidos: ['superadministrador', 'admin', 'arbitro'],
-  etiqueta: 'Prueba'
+  etiqueta: 'Live'
 },
 
     {

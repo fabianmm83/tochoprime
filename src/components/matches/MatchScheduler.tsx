@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { calendarGeneratorService } from '../../services/calendarGenerator';
-import { seasonsService, divisionsService, categoriesService, teamsService } from '../../services/firestore';
+import { 
+  seasonsService, 
+  divisionsService, 
+  categoriesService, 
+  teamsService,
+  matchesService // Importa el método directamente
+} from '../../services/firestore';
 import { CalendarIcon, UsersIcon, TrophyIcon, ClockIcon } from '@heroicons/react/24/outline';
 import type { Season, Division, Category, Team } from '../../types';
 
@@ -110,41 +115,41 @@ const MatchScheduler: React.FC<MatchSchedulerProps> = ({ onCalendarGenerated }) 
   };
 
   const generateCalendar = async () => {
-    if (!selectedSeason || !selectedDivision || !selectedCategory) {
-      showMessage('error', 'Selecciona temporada, división y categoría');
-      return;
-    }
+  if (!selectedSeason || !selectedDivision || !selectedCategory) {
+    showMessage('error', 'Selecciona temporada, división y categoría');
+    return;
+  }
+  
+  if (selectedTeams.length < 2) {
+    showMessage('error', 'Selecciona al menos 2 equipos');
+    return;
+  }
+  
+  const selectedTeamsData = teams.filter(team => selectedTeams.includes(team.id));
+  
+  setGenerating(true);
+  setMessage(null);
+  
+  try {
+    // Usa matchesService.generateSeasonCalendar
+    const createdMatches = await matchesService.generateSeasonCalendar(
+      selectedSeason,        // seasonId: string
+      selectedDivision,      // divisionId: string  
+      selectedTeamsData,     // teams: Team[]
+      isDoubleRoundRobin     // isDoubleRoundRobin: boolean (false por defecto)
+    );
     
-    if (selectedTeams.length < 2) {
-      showMessage('error', 'Selecciona al menos 2 equipos');
-      return;
-    }
+    showMessage('success', `Calendario generado con ${createdMatches.length} partidos`);
+    onCalendarGenerated?.(createdMatches.length);
+    setSelectedTeams([]);
     
-    const selectedTeamsData = teams.filter(team => selectedTeams.includes(team.id));
-    
-    setGenerating(true);
-    setMessage(null);
-    
-    try {
-      const result = await calendarGeneratorService.generateSeasonCalendar(
-        selectedSeason,
-        selectedDivision,
-        selectedCategory,
-        selectedTeamsData,
-        isDoubleRoundRobin,
-        new Date(startDate)
-      );
-      
-      showMessage('success', result.message);
-      onCalendarGenerated?.(result.matches.length);
-      setSelectedTeams([]);
-      
-    } catch (error: any) {
-      showMessage('error', error.message || 'Error generando calendario');
-    } finally {
-      setGenerating(false);
-    }
-  };
+  } catch (error: any) {
+    showMessage('error', error.message || 'Error generando calendario');
+    console.error('Error en generateCalendar:', error);
+  } finally {
+    setGenerating(false);
+  }
+};
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });

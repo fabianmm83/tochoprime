@@ -8,7 +8,8 @@ import RoleBasedRoute from './components/auth/RoleBasedRoute';
 // Páginas de autenticación
 import Login from './pages/Login';
 import Register from './pages/Register';
-
+import StandingsTable from './pages/StandingsTable';
+import LiveScore from './pages/LiveScore';
 // Dashboard principal
 import Dashboard from './pages/Dashboard';
 
@@ -20,8 +21,6 @@ import AdminDashboard from './pages/AdminDashboard';
 
 import LandingPage from './pages/LandingPage';
 
-import TestStandings from './pages/TestStandings';
-import TestLiveScore from './pages/TestLiveScore';
 
 // Páginas del sistema existentes
 import Seasons from './pages/Seasons';
@@ -40,6 +39,9 @@ import Referees from './pages/Referees';
 import Leagues from './pages/Leagues';
 import LeagueDetail from './pages/LeagueDetail';
 import MatchSchedulerPage from './pages/MatchSchedulerPage';
+
+// Importar la página de crear partido desde la subcarpeta matches
+import CreateMatchPage from './pages/matches/CreateMatchPage';
 
 // Componente para redirección por rol
 const RoleBasedRedirect: React.FC = () => {
@@ -206,11 +208,11 @@ function App() {
             </PrivateRoute>
           } />
           
-          {/* CAMBIA ESTO: Quita la prop mode */}
+          {/* Ruta CORREGIDA para crear partido - usa CreateMatchPage desde la subcarpeta */}
           <Route path="/partidos/nuevo" element={
             <PrivateRoute>
               <RoleBasedRoute allowedRoles={['superadministrador', 'admin']}>
-                <MatchDetail />
+                <CreateMatchPage />
               </RoleBasedRoute>
             </PrivateRoute>
           } />
@@ -255,21 +257,21 @@ function App() {
             </PrivateRoute>
           } />
           
-          <Route path="/test/standings" element={
-            <PrivateRoute>
-              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro']}>
-                <TestStandings />
-              </RoleBasedRoute>
-            </PrivateRoute>
-          } />
-          
-          <Route path="/test/livescore" element={
-            <PrivateRoute>
-              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
-                <TestLiveScore />
-              </RoleBasedRoute>
-            </PrivateRoute>
-          } />
+          <Route path="/tabla-posiciones" element={
+  <PrivateRoute>
+    <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro', 'espectador']}>
+      <StandingsTable />
+    </RoleBasedRoute>
+  </PrivateRoute>
+} />
+
+<Route path="/marcador-en-vivo" element={
+  <PrivateRoute>
+    <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
+      <LiveScore />
+    </RoleBasedRoute>
+  </PrivateRoute>
+} />
           
           {/* Árbitros */}
           <Route path="/arbitros" element={
