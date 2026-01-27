@@ -2554,7 +2554,32 @@ export const storageService = {
 
 // Servicio para Pagos
 export const paymentsService = {
-  // Crear pago
+  // Obtener pagos por equipo
+  async getPaymentsByTeam(teamId: string): Promise<Payment[]> {
+    try {
+      const paymentsRef = collection(db, 'payments');
+      const q = query(
+        paymentsRef, 
+        where('teamId', '==', teamId),
+        orderBy('date', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: parseFirestoreDate(doc.data().date),
+        paidDate: parseFirestoreDate(doc.data().paidDate),
+        createdAt: parseFirestoreDate(doc.data().createdAt),
+        updatedAt: parseFirestoreDate(doc.data().updatedAt),
+      } as Payment));
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      throw error;
+    }
+  },
+
+  // ✅ Asegúrate de que este método exista
   async createPayment(paymentData: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
       const paymentsRef = collection(db, 'payments');
@@ -2568,78 +2593,6 @@ export const paymentsService = {
       return docRef.id;
     } catch (error) {
       console.error('Error creating payment:', error);
-      throw error;
-    }
-  },
-
-  // Obtener pagos por equipo
-  async getPaymentsByTeam(teamId: string): Promise<Payment[]> {
-    try {
-      const paymentsRef = collection(db, 'payments');
-      const q = query(
-        paymentsRef, 
-        where('teamId', '==', teamId),
-        orderBy('date', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          date: parseFirestoreDate(data.date),
-          createdAt: parseFirestoreDate(data.createdAt),
-          updatedAt: parseFirestoreDate(data.updatedAt),
-        } as Payment;
-      });
-    } catch (error) {
-      console.error('Error fetching payments:', error);
-      throw error;
-    }
-  },
-
-  // Obtener pagos por temporada
-  async getPaymentsBySeason(seasonId: string): Promise<Payment[]> {
-    try {
-      // Primero obtener todos los equipos de la temporada
-      const teams = await teamsService.getTeamsBySeason(seasonId);
-      const allPayments: Payment[] = [];
-      
-      // Para cada equipo, obtener sus pagos
-      for (const team of teams) {
-        const teamPayments = await this.getPaymentsByTeam(team.id);
-        allPayments.push(...teamPayments);
-      }
-      
-      return allPayments.sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-    } catch (error) {
-      console.error('Error fetching payments by season:', error);
-      throw error;
-    }
-  },
-
-  // Obtener pago por ID
-  async getPaymentById(id: string): Promise<Payment | null> {
-    try {
-      const paymentRef = doc(db, 'payments', id);
-      const paymentDoc = await getDoc(paymentRef);
-      
-      if (paymentDoc.exists()) {
-        const data = paymentDoc.data();
-        return {
-          id: paymentDoc.id,
-          ...data,
-          date: parseFirestoreDate(data.date),
-          createdAt: parseFirestoreDate(data.createdAt),
-          updatedAt: parseFirestoreDate(data.updatedAt),
-        } as Payment;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching payment:', error);
       throw error;
     }
   },
@@ -2669,38 +2622,56 @@ export const paymentsService = {
     }
   },
 
-  // Obtener resumen de pagos por equipo
-  // En paymentsService.getPaymentSummary, corregir el tipo de lastPayment:
-async getPaymentSummary(teamId: string): Promise<{
-  totalPaid: number;
-  lastPayment: Date | null; // ← Ya está bien
-  paymentsCount: number;
-}> {
-  try {
-    const payments = await this.getPaymentsByTeam(teamId);
-    const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
-    
-    // Asegurar que lastPayment sea Date | null
-    let lastPayment: Date | null = null;
-    if (payments.length > 0) {
-      const lastPaymentDate = payments[0].date; // asumiendo que está ordenado por fecha descendente
+  // Obtener pago por ID
+  async getPaymentById(id: string): Promise<Payment | null> {
+    try {
+      const paymentRef = doc(db, 'payments', id);
+      const paymentDoc = await getDoc(paymentRef);
       
-      // Convertir a Date si es string
-      lastPayment = typeof lastPaymentDate === 'string' 
-        ? new Date(lastPaymentDate) 
-        : lastPaymentDate;
+      if (paymentDoc.exists()) {
+        return {
+          id: paymentDoc.id,
+          ...paymentDoc.data(),
+          date: parseFirestoreDate(paymentDoc.data().date),
+          paidDate: parseFirestoreDate(paymentDoc.data().paidDate),
+          createdAt: parseFirestoreDate(paymentDoc.data().createdAt),
+          updatedAt: parseFirestoreDate(paymentDoc.data().updatedAt),
+        } as Payment;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching payment:', error);
+      throw error;
     }
-    
-    return {
-      totalPaid,
-      lastPayment,
-      paymentsCount: payments.length
-    };
-  } catch (error) {
-    console.error('Error getting payment summary:', error);
-    throw error;
-  }
-}
+  },
+
+  // Obtener resumen de pagos
+  async getPaymentSummary(teamId: string): Promise<{
+    total: number;
+    paid: number;
+    pending: number;
+    overdue: number;
+  }> {
+    try {
+      const payments = await this.getPaymentsByTeam(teamId);
+      
+      const total = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      const paid = payments
+        .filter(p => p.status === 'paid')
+        .reduce((sum, payment) => sum + payment.amount, 0);
+      const pending = payments
+        .filter(p => p.status === 'pending')
+        .reduce((sum, payment) => sum + payment.amount, 0);
+      const overdue = payments
+        .filter(p => p.status === 'overdue')
+        .reduce((sum, payment) => sum + payment.amount, 0);
+      
+      return { total, paid, pending, overdue };
+    } catch (error) {
+      console.error('Error getting payment summary:', error);
+      throw error;
+    }
+  },
 };
 
 

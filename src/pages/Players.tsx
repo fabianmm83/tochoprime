@@ -85,27 +85,52 @@ const Players: React.FC = () => {
   };
 
   const handleCreatePlayer = async () => {
-    try {
-      if (!newPlayer.teamId) {
-        setNotification({ type: 'error', message: 'Selecciona un equipo para el jugador' });
-        return;
-      }
-
-      await playersService.createPlayer({
-        ...newPlayer,
-        dateOfBirth: newPlayer.dateOfBirth ? new Date(newPlayer.dateOfBirth) : undefined,
-        registrationDate: new Date(),
-      });
-      
-      setNotification({ type: 'success', message: 'Jugador creado exitosamente' });
-      setShowCreateModal(false);
-      resetForm();
-      fetchData();
-    } catch (error) {
-      console.error('Error creating player:', error);
-      setNotification({ type: 'error', message: 'Error al crear el jugador' });
+  try {
+    if (!newPlayer.teamId) {
+      setNotification({ type: 'error', message: 'Selecciona un equipo para el jugador' });
+      return;
     }
-  };
+
+    // Crear objeto con el tipo EXACTO que espera el servicio
+    const playerData: Omit<Player, 'id' | 'createdAt' | 'updatedAt' | 'stats'> = {
+      // Campos requeridos según tu interfaz Player
+      teamId: newPlayer.teamId,
+      name: newPlayer.name,
+      lastName: newPlayer.lastName,
+      number: newPlayer.number,
+      position: newPlayer.position,
+      email: newPlayer.email || '', // Si email es requerido, asegúrate de enviar string vacía
+      phone: newPlayer.phone,
+      registrationDate: new Date().toISOString(),
+      status: newPlayer.status,
+      isCaptain: newPlayer.isCaptain,
+      isViceCaptain: newPlayer.isViceCaptain,
+      
+      // Campos opcionales con valores por defecto
+      dateOfBirth: newPlayer.dateOfBirth ? new Date(newPlayer.dateOfBirth).toISOString() : null,
+      emergencyContact: newPlayer.emergencyContact.name ? newPlayer.emergencyContact : undefined,
+      
+      // Otros campos opcionales de tu interfaz
+      identification: undefined,
+      medicalInfo: undefined,
+      leadershipHistory: undefined,
+      leadershipScore: undefined,
+      captainSince: undefined,
+      viceCaptainSince: undefined,
+      eligibility: undefined,
+    };
+
+    await playersService.createPlayer(playerData);
+    
+    setNotification({ type: 'success', message: 'Jugador creado exitosamente' });
+    setShowCreateModal(false);
+    resetForm();
+    fetchData();
+  } catch (error) {
+    console.error('Error creating player:', error);
+    setNotification({ type: 'error', message: 'Error al crear el jugador' });
+  }
+};
 
   const handleDeletePlayer = async (playerId: string, playerName: string) => {
     if (window.confirm(`¿Estás seguro de que deseas eliminar a ${playerName}?`)) {
@@ -157,33 +182,33 @@ const Players: React.FC = () => {
       case 'quarterback': return 'bg-red-100 text-red-800';
       case 'runningback': return 'bg-orange-100 text-orange-800';
       case 'wide_receiver': return 'bg-blue-100 text-blue-800';
-      case 'tight_end': return 'bg-green-100 text-green-800';
-      case 'offensive_line': return 'bg-yellow-100 text-yellow-800';
-      case 'defensive_line': return 'bg-indigo-100 text-indigo-800';
       case 'linebacker': return 'bg-purple-100 text-purple-800';
-      case 'cornerback': return 'bg-pink-100 text-pink-800';
+      case 'cornerback': return 'bg-indigo-100 text-indigo-800';
       case 'safety': return 'bg-teal-100 text-teal-800';
-      case 'kicker': return 'bg-cyan-100 text-cyan-800';
-      case 'punter': return 'bg-rose-100 text-rose-800';
-      case 'utility': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getPositionLabel = (position: Player['position']) => {
     switch (position) {
+      case 'quarterback': return 'QB';
+      case 'runningback': return 'RB';
+      case 'wide_receiver': return 'WR';
+      case 'linebacker': return 'LB';
+      case 'cornerback': return 'CB';
+      case 'safety': return 'S';
+      default: return position;
+    }
+  };
+
+  const getPositionFullLabel = (position: Player['position']) => {
+    switch (position) {
       case 'quarterback': return 'Quarterback';
       case 'runningback': return 'Running Back';
       case 'wide_receiver': return 'Wide Receiver';
-      case 'tight_end': return 'Tight End';
-      case 'offensive_line': return 'Offensive Line';
-      case 'defensive_line': return 'Defensive Line';
       case 'linebacker': return 'Linebacker';
       case 'cornerback': return 'Cornerback';
       case 'safety': return 'Safety';
-      case 'kicker': return 'Kicker';
-      case 'punter': return 'Punter';
-      case 'utility': return 'Utility';
       default: return position;
     }
   };
@@ -208,8 +233,8 @@ const Players: React.FC = () => {
     // Search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      if (!player.name.toLowerCase().includes(searchLower) && 
-          !player.lastName.toLowerCase().includes(searchLower) &&
+      const fullName = `${player.name} ${player.lastName}`.toLowerCase();
+      if (!fullName.includes(searchLower) && 
           !player.email?.toLowerCase().includes(searchLower) &&
           !player.phone?.includes(searchTerm)) {
         return false;
@@ -341,7 +366,7 @@ const Players: React.FC = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Posición (Tocho)
+                Posición
               </label>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -354,7 +379,7 @@ const Players: React.FC = () => {
                 >
                   Todas
                 </button>
-                {['quarterback', 'runningback', 'wide_receiver', 'tight_end', 'utility'].map((position) => (
+                {['quarterback', 'runningback', 'wide_receiver', 'linebacker', 'cornerback', 'safety'].map((position) => (
                   <button
                     key={position}
                     onClick={() => setPositionFilter(position)}
@@ -367,18 +392,6 @@ const Players: React.FC = () => {
                     {getPositionLabel(position as Player['position'])}
                   </button>
                 ))}
-                <select
-                  value={positionFilter}
-                  onChange={(e) => setPositionFilter(e.target.value)}
-                  className="px-3 py-1.5 rounded-full text-sm bg-gray-100 text-gray-700 border-none focus:ring-0"
-                >
-                  <option value="all">Otras posiciones...</option>
-                  {['offensive_line', 'defensive_line', 'linebacker', 'cornerback', 'safety', 'kicker', 'punter'].map((position) => (
-                    <option key={position} value={position}>
-                      {getPositionLabel(position as Player['position'])}
-                    </option>
-                  ))}
-                </select>
               </div>
             </div>
 
@@ -488,6 +501,9 @@ const Players: React.FC = () => {
                         </h3>
                         {player.isCaptain && (
                           <ShieldCheckIcon className="w-4 h-4 text-yellow-600 flex-shrink-0" title="Capitán" />
+                        )}
+                        {player.isViceCaptain && (
+                          <ShieldCheckIcon className="w-4 h-4 text-gray-600 flex-shrink-0" title="Vice-capitán" />
                         )}
                       </div>
                       
@@ -619,14 +635,12 @@ const Players: React.FC = () => {
                 className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
-                <option value="quarterback">Quarterback</option>
-                <option value="runningback">Running Back</option>
-                <option value="wide_receiver">Wide Receiver</option>
-                <option value="tight_end">Tight End</option>
-                <option value="linebacker">Linebacker</option>
-                <option value="cornerback">Cornerback</option>
-                <option value="safety">Safety</option>
-                <option value="kicker">Kicker</option>
+                <option value="quarterback">Quarterback (QB)</option>
+                <option value="runningback">Running Back (RB)</option>
+                <option value="wide_receiver">Wide Receiver (WR)</option>
+                <option value="linebacker">Linebacker (LB)</option>
+                <option value="cornerback">Cornerback (CB)</option>
+                <option value="safety">Safety (S)</option>
               </select>
             </div>
           </div>

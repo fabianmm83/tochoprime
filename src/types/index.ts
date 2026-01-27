@@ -186,27 +186,26 @@ export interface Player {
   lastName: string;
   dateOfBirth?: Date | string | null;
   number: number;
-  // ✅ Cambiar posiciones para tocho
   position: 'quarterback' | 'runningback' | 'wide_receiver' | 'linebacker' | 'cornerback' | 'safety';
   email: string;
   phone: string;
+  // ✅ Cambia para aceptar null
   emergencyContact?: {
     name: string;
     phone: string;
     relationship: string;
-  };
+  } | null;  // Añade | null aquí
   identification?: {
     type: string;
     number: string;
-  };
+  } | null;  // Añade | null aquí también si es necesario
   registrationDate: Date | string;
   status: 'active' | 'suspended' | 'injured' | 'inactive' | 'pending';
   medicalInfo?: {
     allergies?: string;
     conditions?: string;
     insurance?: string;
-  };
-  // ✅ Cambiar estadísticas para tocho
+  } | null;  // Añade | null aquí
   stats?: {
     matchesPlayed: number;
     touchdowns: number;
@@ -215,20 +214,20 @@ export interface Player {
     safeties: number;
     tackles: number;
     penalties: number;
-    yards?: number; // opcional para futuras mejoras
-  };
+    yards?: number;
+  } | null;  // Añade | null aquí
   isCaptain: boolean;
   isViceCaptain: boolean;
-  leadershipHistory?: LeadershipRole[];
+  leadershipHistory?: LeadershipRole[] | null;  // Añade | null
   leadershipScore?: number;
-  captainSince?: string | Date;
-  viceCaptainSince?: string | Date;
+  captainSince?: string | Date | null;  // Añade | null
+  viceCaptainSince?: string | Date | null;  // Añade | null
   eligibility?: {
     canBeCaptain: boolean;
     canBeViceCaptain: boolean;
     reasons: string[];
     score: number;
-  };
+  } | null;  // Añade | null
   createdAt: Date | string;
   updatedAt: Date | string;
 }
