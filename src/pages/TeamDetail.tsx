@@ -5,9 +5,11 @@ import {
   playersService,
   categoriesService,
   divisionsService,
-  seasonsService 
+  seasonsService,
+  paymentsService,
+  matchesService
 } from '../services/firestore';
-import { Team, Player, Category, Division, Season } from '../types';
+import { Team, Player, Category, Division, Season, Payment, Match } from '../types';
 import {
   ArrowLeftIcon,
   TrophyIcon,
@@ -28,6 +30,10 @@ import {
   XCircleIcon,
   ClockIcon,
   ChevronRightIcon,
+  BanknotesIcon,
+  DocumentPlusIcon,
+  EyeIcon,
+  FunnelIcon,
 } from '@heroicons/react/24/outline';
 import Modal from '../components/common/Modal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -41,18 +47,21 @@ const TeamDetail: React.FC = () => {
   const [category, setCategory] = useState<Category | null>(null);
   const [division, setDivision] = useState<Division | null>(null);
   const [season, setSeason] = useState<Season | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [showEditTeamModal, setShowEditTeamModal] = useState(false);
+  const [showPaymentHistoryModal, setShowPaymentHistoryModal] = useState(false);
+  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
   const [newPlayer, setNewPlayer] = useState({
     name: '',
-    lastName: '',
     number: 1,
-    position: 'wide_receiver' as Player['position'],
-    email: '',
+    position: 'quarterback' as Player['position'],
     phone: '',
+    email: '',
     dateOfBirth: '',
     emergencyContact: {
       name: '',
@@ -60,6 +69,15 @@ const TeamDetail: React.FC = () => {
       relationship: ''
     },
     status: 'pending' as Player['status'],
+  });
+
+  const [newPayment, setNewPayment] = useState({
+    amount: 0,
+    date: new Date().toISOString().split('T')[0],
+    method: 'cash' as Payment['method'],
+    reference: '',
+    notes: '',
+    status: 'paid' as Payment['status']
   });
 
   const [editTeamData, setEditTeamData] = useState({
@@ -113,6 +131,16 @@ const TeamDetail: React.FC = () => {
       const playersData = await playersService.getPlayersByTeam(teamId);
       setPlayers(playersData.sort((a, b) => a.number - b.number));
       
+      // Obtener pagos
+      const paymentsData = await paymentsService.getPaymentsByTeam(teamId);
+      setPayments(paymentsData);
+      
+      // Obtener partidos
+      const matchesData = await matchesService.getMatchesByTeam(teamId);
+      // Filtrar solo partidos completados
+      const completedMatches = matchesData.filter(match => match.status === 'completed');
+      setMatches(completedMatches.slice(0, 5)); // Últimos 5 partidos
+      
       // Obtener categoría
       if (teamData.categoryId) {
         const categoryData = await categoriesService.getCategoryById(teamData.categoryId);
@@ -148,13 +176,13 @@ const TeamDetail: React.FC = () => {
       // Preparar datos del jugador
       const playerData = {
         name: newPlayer.name,
-        lastName: newPlayer.lastName,
+        lastName: '', // Ya no se usa apellido
         number: newPlayer.number,
         position: newPlayer.position,
         email: newPlayer.email,
         phone: newPlayer.phone,
         teamId: team.id,
-        dateOfBirth: newPlayer.dateOfBirth ? new Date(newPlayer.dateOfBirth).toISOString() : undefined,
+        dateOfBirth: newPlayer.dateOfBirth ? new Date(newPlayer.dateOfBirth).toISOString() : null,
         registrationDate: new Date().toISOString(),
         emergencyContact: newPlayer.emergencyContact,
         status: newPlayer.status,
@@ -171,6 +199,49 @@ const TeamDetail: React.FC = () => {
     } catch (error) {
       console.error('Error adding player:', error);
       setNotification({ type: 'error', message: 'Error al agregar el jugador' });
+    }
+  };
+
+  const handleAddPayment = async () => {
+    if (!team) return;
+
+    try {
+      const paymentData: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'> = {
+        teamId: team.id,
+        seasonId: team.seasonId,
+        amount: newPayment.amount,
+        date: new Date(newPayment.date),
+        method: newPayment.method || 'cash',
+        reference: newPayment.reference || '',
+        notes: newPayment.notes || '',
+        status: newPayment.status,
+        ...(newPayment.status === 'paid' && { paidDate: new Date() }),
+        invoiceNumber: '',
+        createdBy: 'admin'
+      };
+
+      await paymentsService.createPayment(paymentData);
+      
+      // Actualizar estado de pago del equipo
+      let newPaymentStatus: Team['paymentStatus'] = 'pending';
+      const categoryPrice = category?.price || 0;
+      const totalPayments = payments.reduce((sum, p) => sum + p.amount, 0) + newPayment.amount;
+      
+      if (totalPayments >= categoryPrice) {
+        newPaymentStatus = 'paid';
+      } else if (totalPayments > 0) {
+        newPaymentStatus = 'partial';
+      }
+      
+      await teamsService.updatePaymentStatus(team.id, newPaymentStatus);
+      
+      setNotification({ type: 'success', message: 'Pago registrado exitosamente' });
+      setShowAddPaymentModal(false);
+      resetPaymentForm();
+      fetchData(team.id);
+    } catch (error) {
+      console.error('Error adding payment:', error);
+      setNotification({ type: 'error', message: 'Error al registrar el pago' });
     }
   };
 
@@ -225,11 +296,10 @@ const TeamDetail: React.FC = () => {
   const resetNewPlayerForm = () => {
     setNewPlayer({
       name: '',
-      lastName: '',
       number: 1,
-      position: 'wide_receiver',
-      email: '',
+       position: 'quarterback' as Player['position'],
       phone: '',
+      email: '',
       dateOfBirth: '',
       emergencyContact: {
         name: '',
@@ -240,20 +310,25 @@ const TeamDetail: React.FC = () => {
     });
   };
 
+  const resetPaymentForm = () => {
+    setNewPayment({
+      amount: 0,
+      date: new Date().toISOString().split('T')[0],
+      method: 'cash',
+      reference: '',
+      notes: '',
+      status: 'paid'
+    });
+  };
+
   const getPositionColor = (position: Player['position']) => {
     switch (position) {
       case 'quarterback': return 'bg-red-100 text-red-800';
       case 'runningback': return 'bg-orange-100 text-orange-800';
       case 'wide_receiver': return 'bg-blue-100 text-blue-800';
-      case 'tight_end': return 'bg-green-100 text-green-800';
-      case 'offensive_line': return 'bg-yellow-100 text-yellow-800';
-      case 'defensive_line': return 'bg-indigo-100 text-indigo-800';
-      case 'linebacker': return 'bg-purple-100 text-purple-800';
-      case 'cornerback': return 'bg-pink-100 text-pink-800';
+      case 'cornerback': return 'bg-indigo-100 text-indigo-800';
       case 'safety': return 'bg-teal-100 text-teal-800';
-      case 'kicker': return 'bg-cyan-100 text-cyan-800';
-      case 'punter': return 'bg-rose-100 text-rose-800';
-      case 'utility': return 'bg-gray-100 text-gray-800';
+      case 'linebacker': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -263,20 +338,13 @@ const TeamDetail: React.FC = () => {
       case 'quarterback': return 'QB';
       case 'runningback': return 'RB';
       case 'wide_receiver': return 'WR';
-      case 'tight_end': return 'TE';
-      case 'offensive_line': return 'OL';
-      case 'defensive_line': return 'DL';
-      case 'linebacker': return 'LB';
       case 'cornerback': return 'CB';
-      case 'safety': return 'S';
-      case 'kicker': return 'K';
-      case 'punter': return 'P';
-      case 'utility': return 'UTL';
+      case 'safety': return 'SF';
+      case 'linebacker': return 'LB';
       default: return position;
     }
   };
 
-  // Función para estado de JUGADORES
   const getPlayerStatusColor = (status: Player['status']) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800';
@@ -288,7 +356,6 @@ const TeamDetail: React.FC = () => {
     }
   };
 
-  // Función para estado de EQUIPOS
   const getTeamStatusColor = (status: Team['status']) => {
     switch (status) {
       case 'approved':
@@ -298,6 +365,16 @@ const TeamDetail: React.FC = () => {
       case 'suspended': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const calculateTeamRecord = () => {
+    if (!team?.stats) return { wins: 0, draws: 0, losses: 0 };
+    
+    return {
+      wins: team.stats.wins || 0,
+      draws: team.stats.draws || 0,
+      losses: team.stats.losses || 0
+    };
   };
 
   if (loading) {
@@ -321,9 +398,12 @@ const TeamDetail: React.FC = () => {
     );
   }
 
+  const record = calculateTeamRecord();
+  const totalGames = record.wins + record.draws + record.losses;
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Header - Mobile Optimized */}
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 pt-4 pb-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
@@ -409,7 +489,75 @@ const TeamDetail: React.FC = () => {
 
       {/* Main Content */}
       <div className="px-4 pt-6">
-        {/* Team Information */}
+        {/* Estadísticas del Equipo */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Record del Equipo</h2>
+            <ChartBarIcon className="w-5 h-5 text-gray-400" />
+          </div>
+          
+          <div className="space-y-4">
+            {/* Record Principal */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center p-3 bg-green-50 rounded-lg">
+                <p className="text-2xl font-bold text-green-600">{record.wins}</p>
+                <p className="text-xs text-gray-600">Victorias</p>
+              </div>
+              <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                <p className="text-2xl font-bold text-yellow-600">{record.draws}</p>
+                <p className="text-xs text-gray-600">Empates</p>
+              </div>
+              <div className="text-center p-3 bg-red-50 rounded-lg">
+                <p className="text-2xl font-bold text-red-600">{record.losses}</p>
+                <p className="text-xs text-gray-600">Derrotas</p>
+              </div>
+            </div>
+
+            {/* Puntos */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <p className="text-2xl font-bold text-blue-600">{team.stats?.touchdowns || team.stats?.goalsFor || 0}</p>
+                <p className="text-xs text-gray-600">Puntos Anotados</p>
+              </div>
+              <div className="text-center p-3 bg-orange-50 rounded-lg">
+                <p className="text-2xl font-bold text-orange-600">{team.stats?.penalties || team.stats?.goalsAgainst || 0}</p>
+                <p className="text-xs text-gray-600">Puntos en Contra</p>
+              </div>
+            </div>
+
+            {/* Totales */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center p-3 bg-gray-50 rounded-lg">
+                <p className="text-lg font-bold text-gray-800">{totalGames}</p>
+                <p className="text-xs text-gray-600">Total Partidos</p>
+              </div>
+              <div className="text-center p-3 bg-purple-50 rounded-lg">
+                <p className="text-lg font-bold text-purple-600">{team.stats?.points || 0}</p>
+                <p className="text-xs text-gray-600">Puntos Liga</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Botones de Acción Rápidos */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <button
+            onClick={() => setShowPaymentHistoryModal(true)}
+            className="bg-blue-50 border border-blue-200 text-blue-700 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-blue-100 transition-colors"
+          >
+            <BanknotesIcon className="w-6 h-6 mb-2" />
+            <span className="text-sm font-medium">Historial de Pagos</span>
+          </button>
+          <button
+            onClick={() => setShowAddPaymentModal(true)}
+            className="bg-green-50 border border-green-200 text-green-700 rounded-lg p-4 flex flex-col items-center justify-center hover:bg-green-100 transition-colors"
+          >
+            <DocumentPlusIcon className="w-6 h-6 mb-2" />
+            <span className="text-sm font-medium">Agregar Pago</span>
+          </button>
+        </div>
+
+        {/* Información del Equipo */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Información del Equipo</h2>
           
@@ -453,52 +601,63 @@ const TeamDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Team Statistics - Mobile Grid */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Estadísticas del Equipo</h2>
-            <ChartBarIcon className="w-5 h-5 text-gray-400" />
+        {/* Últimos Partidos */}
+        {matches.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Últimos Partidos</h2>
+            <div className="space-y-3">
+              {matches.map((match) => (
+                <div key={match.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">
+                      {match.homeTeamId === team.id ? 'vs' : '@'} {match.homeTeamId === team.id ? '?' : '?'}
+                    </p>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className="text-xs text-gray-600">
+                        {new Date(match.matchDate).toLocaleDateString()}
+                      </span>
+                      {match.homeScore !== undefined && match.awayScore !== undefined && (
+                        <span className="text-xs font-medium">
+                          {match.homeTeamId === team.id ? match.homeScore : match.awayScore} - 
+                          {match.homeTeamId === team.id ? match.awayScore : match.homeScore}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {match.winner === (match.homeTeamId === team.id ? 'home' : 'away') ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                        Victoria
+                      </span>
+                    ) : match.winner === 'draw' ? (
+                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                        Empate
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                        Derrota
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">{team.stats?.wins || 0}</p>
-              <p className="text-xs text-gray-600">Victorias</p>
-            </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <p className="text-2xl font-bold text-green-600">{team.stats?.draws || 0}</p>
-              <p className="text-xs text-gray-600">Empates</p>
-            </div>
-            <div className="text-center p-3 bg-red-50 rounded-lg">
-              <p className="text-2xl font-bold text-red-600">{team.stats?.losses || 0}</p>
-              <p className="text-xs text-gray-600">Derrotas</p>
-            </div>
-            <div className="text-center p-3 bg-purple-50 rounded-lg">
-              <p className="text-2xl font-bold text-purple-600">{team.stats?.points || 0}</p>
-              <p className="text-xs text-gray-600">Puntos</p>
-            </div>
-            <div className="text-center p-3 bg-gray-50 rounded-lg col-span-2">
-              <div className="flex justify-center space-x-4">
-                <div>
-                  <p className="text-lg font-bold text-gray-800">{team.stats?.touchdowns || team.stats?.goalsFor || 0}</p>
-<p className="text-xs text-gray-600">TD</p>
-</div>
-<div>
-  <p className="text-lg font-bold text-gray-800">{team.stats?.penalties || team.stats?.goalsAgainst || 0}</p>
-  <p className="text-xs text-gray-600">Penal</p>
-</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Players Section */}
+        {/* Roster - Lista de Jugadores */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
               <UserGroupIcon className="w-5 h-5 text-gray-400" />
-              <h2 className="text-lg font-semibold text-gray-900">Jugadores ({players.length})</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Roster ({players.length})</h2>
             </div>
+            <button
+              onClick={() => setShowAddPlayerModal(true)}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              + Agregar
+            </button>
           </div>
           
           <div className="space-y-3">
@@ -514,16 +673,18 @@ const TeamDetail: React.FC = () => {
                   <div>
                     <div className="flex items-center space-x-2">
                       <p className="font-medium text-gray-900">
-                        {player.name} {player.lastName}
+                        {player.name}
                       </p>
                       {player.isCaptain && (
                         <ShieldCheckIcon className="w-4 h-4 text-yellow-600" title="Capitán" />
                       )}
                     </div>
                     <div className="flex items-center space-x-2 mt-1">
-                      <span className={`px-2 py-0.5 rounded-full text-xs ${getPositionColor(player.position)}`}>
-                        {getPositionLabel(player.position)}
-                      </span>
+                      {player.position && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${getPositionColor(player.position)}`}>
+                          {getPositionLabel(player.position)}
+                        </span>
+                      )}
                       <span className={`px-2 py-0.5 rounded-full text-xs ${getPlayerStatusColor(player.status)}`}>
                         {player.status === 'active' ? 'Activo' :
                          player.status === 'pending' ? 'Pendiente' :
@@ -545,7 +706,7 @@ const TeamDetail: React.FC = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => handleDeletePlayer(player.id, `${player.name} ${player.lastName}`)}
+                    onClick={() => handleDeletePlayer(player.id, player.name)}
                     className="p-1.5 text-gray-400 hover:text-red-600 bg-gray-100 rounded-lg"
                     title="Eliminar"
                   >
@@ -568,47 +729,42 @@ const TeamDetail: React.FC = () => {
               </div>
             )}
           </div>
-          
-          <button
-            onClick={() => setShowAddPlayerModal(true)}
-            className="w-full mt-4 flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-          >
-            <PlusIcon className="w-5 h-5 mr-2" />
-            Agregar Nuevo Jugador
-          </button>
         </div>
 
-        {/* Quick Contact */}
-        {players.length > 0 && (
+        {/* Contacto Rápido */}
+        {players.filter(p => p.phone).length > 0 && (
           <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Contacto Rápido</h2>
             <div className="space-y-3">
-              {players.slice(0, 3).map((player) => (
-                <div key={player.id} className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {player.name} {player.lastName.charAt(0)}.
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {getPositionLabel(player.position)}
-                    </p>
-                  </div>
-                  {player.phone && (
+              {players
+                .filter(p => p.phone)
+                .slice(0, 3)
+                .map((player) => (
+                  <div key={player.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {player.name}
+                      </p>
+                      {player.position && (
+                        <p className="text-sm text-gray-600">
+                          {getPositionLabel(player.position)}
+                        </p>
+                      )}
+                    </div>
                     <a
                       href={`tel:${player.phone}`}
                       className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                     >
                       {player.phone}
                     </a>
-                  )}
-                </div>
-              ))}
+                  </div>
+                ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* Add Player Modal - Mobile Optimized */}
+      {/* Add Player Modal - SIMPLIFICADO */}
       <Modal
         isOpen={showAddPlayerModal}
         onClose={() => {
@@ -619,31 +775,18 @@ const TeamDetail: React.FC = () => {
         size="full"
       >
         <div className="space-y-4 px-4 pb-20">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nombre *
-              </label>
-              <input
-                type="text"
-                value={newPlayer.name}
-                onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Apellido *
-              </label>
-              <input
-                type="text"
-                value={newPlayer.lastName}
-                onChange={(e) => setNewPlayer({ ...newPlayer, lastName: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                required
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre *
+            </label>
+            <input
+              type="text"
+              value={newPlayer.name}
+              onChange={(e) => setNewPlayer({ ...newPlayer, name: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              placeholder="Ej: Juan"
+              required
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -663,54 +806,48 @@ const TeamDetail: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Posición *
+                Posición
               </label>
               <select
                 value={newPlayer.position}
                 onChange={(e) => setNewPlayer({ ...newPlayer, position: e.target.value as Player['position'] })}
                 className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                required
               >
-                <option value="quarterback">Quarterback</option>
-                <option value="runningback">Running Back</option>
-                <option value="wide_receiver">Wide Receiver</option>
-                <option value="tight_end">Tight End</option>
-                <option value="offensive_line">Offensive Line</option>
-                <option value="defensive_line">Defensive Line</option>
-                <option value="linebacker">Linebacker</option>
-                <option value="cornerback">Cornerback</option>
-                <option value="safety">Safety</option>
-                <option value="kicker">Kicker</option>
-                <option value="punter">Punter</option>
-                <option value="utility">Utility</option>
+                <option value="">Seleccionar...</option>
+                <option value="quarterback">QB - Quarterback</option>
+                <option value="runningback">RB - Running Back</option>
+                <option value="wide_receiver">WR - Wide Receiver</option>
+                <option value="cornerback">CB - Cornerback</option>
+                <option value="safety">SF - Safety</option>
+                <option value="linebacker">LB - Linebacker</option>
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Teléfono *
-              </label>
-              <input
-                type="tel"
-                value={newPlayer.phone}
-                onChange={(e) => setNewPlayer({ ...newPlayer, phone: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={newPlayer.email}
-                onChange={(e) => setNewPlayer({ ...newPlayer, email: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Teléfono
+            </label>
+            <input
+              type="tel"
+              value={newPlayer.phone}
+              onChange={(e) => setNewPlayer({ ...newPlayer, phone: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              value={newPlayer.email}
+              onChange={(e) => setNewPlayer({ ...newPlayer, email: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              placeholder="Opcional"
+            />
           </div>
 
           <div>
@@ -726,7 +863,7 @@ const TeamDetail: React.FC = () => {
           </div>
 
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Contacto de Emergencia</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Contacto de Emergencia (Opcional)</h4>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -801,13 +938,253 @@ const TeamDetail: React.FC = () => {
             </button>
             <button
               onClick={handleAddPlayer}
-              disabled={!newPlayer.name || !newPlayer.lastName || !newPlayer.phone}
+              disabled={!newPlayer.name}
               className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Agregar Jugador
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Payment History Modal */}
+      <Modal
+        isOpen={showPaymentHistoryModal}
+        onClose={() => setShowPaymentHistoryModal(false)}
+        title="Historial de Pagos"
+        size="lg"
+      >
+        {team && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">{team.name}</h3>
+                  <p className="text-sm text-gray-600">
+                    Total pagado: <span className="font-bold text-green-600">
+                      ${payments.reduce((sum, p) => sum + p.amount, 0).toLocaleString()}
+                    </span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPaymentHistoryModal(false);
+                    setShowAddPaymentModal(true);
+                  }}
+                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <DocumentPlusIcon className="w-5 h-5 mr-2" />
+                  Agregar Pago
+                </button>
+              </div>
+            </div>
+
+            {payments.length === 0 ? (
+              <div className="text-center py-8">
+                <BanknotesIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600 mb-2">No hay pagos registrados</p>
+                <p className="text-sm text-gray-500">Registra el primer pago para este equipo</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-medium text-gray-900">Pagos realizados</h4>
+                  <span className="text-sm text-gray-600">
+                    Total: ${payments.reduce((sum, p) => sum + p.amount, 0).toLocaleString()}
+                  </span>
+                </div>
+                
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {payments.map((payment) => (
+                    <div key={payment.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            ${payment.amount.toLocaleString()}
+                          </p>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <span className="text-xs text-gray-600">
+                              {new Date(payment.date).toLocaleDateString()}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs ${
+                              payment.status === 'paid' ? 'bg-green-100 text-green-800' :
+                              payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {payment.status === 'paid' ? 'Pagado' :
+                               payment.status === 'pending' ? 'Pendiente' : 'Cancelado'}
+                            </span>
+                          </div>
+                          {payment.method && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              Método: {payment.method === 'cash' ? 'Efectivo' :
+                                       payment.method === 'transfer' ? 'Transferencia' :
+                                       payment.method === 'card' ? 'Tarjeta' : 'Cheque'}
+                            </p>
+                          )}
+                          {payment.reference && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Ref: {payment.reference}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {payment.notes && (
+                            <p className="text-xs text-gray-600 max-w-xs text-right">
+                              {payment.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Add Payment Modal */}
+      <Modal
+        isOpen={showAddPaymentModal}
+        onClose={() => {
+          setShowAddPaymentModal(false);
+          resetPaymentForm();
+        }}
+        title="Agregar Pago"
+        size="md"
+      >
+        {team && (
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">{team.name}</h3>
+                  <p className="text-sm text-gray-600">Registrar nuevo pago</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Total pagado:</p>
+                  <p className="text-lg font-bold text-green-600">
+                    ${payments.reduce((sum, p) => sum + p.amount, 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Monto *
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                <input
+                  type="number"
+                  value={newPayment.amount}
+                  onChange={(e) => setNewPayment({ ...newPayment, amount: parseFloat(e.target.value) || 0 })}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  min="0"
+                  step="0.01"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha *
+                </label>
+                <input
+                  type="date"
+                  value={newPayment.date}
+                  onChange={(e) => setNewPayment({ ...newPayment, date: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Método *
+                </label>
+                <select
+                  value={newPayment.method}
+                  onChange={(e) => setNewPayment({ ...newPayment, method: e.target.value as Payment['method'] })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="cash">Efectivo</option>
+                  <option value="transfer">Transferencia</option>
+                  <option value="card">Tarjeta</option>
+                  <option value="check">Cheque</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Referencia (Opcional)
+              </label>
+              <input
+                type="text"
+                value={newPayment.reference}
+                onChange={(e) => setNewPayment({ ...newPayment, reference: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Número de transacción, cheque, etc."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Notas (Opcional)
+              </label>
+              <textarea
+                value={newPayment.notes}
+                onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                rows={2}
+                placeholder="Observaciones sobre el pago..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Estado del Pago *
+              </label>
+              <select
+                value={newPayment.status}
+                onChange={(e) => setNewPayment({ ...newPayment, status: e.target.value as Payment['status'] })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                <option value="pending">Pendiente</option>
+                <option value="paid">Pagado</option>
+                <option value="cancelled">Cancelado</option>
+                <option value="refunded">Reembolsado</option>
+                <option value="overdue">Vencido</option>
+              </select>
+            </div>
+
+            <div className="flex space-x-3 pt-4">
+              <button
+                onClick={() => {
+                  setShowAddPaymentModal(false);
+                  resetPaymentForm();
+                }}
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddPayment}
+                disabled={newPayment.amount <= 0}
+                className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Registrar Pago
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Edit Team Modal */}

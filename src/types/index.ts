@@ -184,11 +184,10 @@ export interface Player {
   teamId: string;
   name: string;
   lastName: string;
-  dateOfBirth?: Date | string;
+  dateOfBirth?: Date | string | null;
   number: number;
   // ✅ Cambiar posiciones para tocho
-  position: 'quarterback' | 'runningback' | 'wide_receiver' | 'tight_end' | 'offensive_line' | 
-            'defensive_line' | 'linebacker' | 'cornerback' | 'safety' | 'kicker' | 'punter' | 'utility';
+  position: 'quarterback' | 'runningback' | 'wide_receiver' | 'linebacker' | 'cornerback' | 'safety';
   email: string;
   phone: string;
   emergencyContact?: {
@@ -593,12 +592,15 @@ export interface Payment {
   teamId: string;
   seasonId: string;
   amount: number;
-  status: 'pending' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
-  dueDate: Date | string;
+  // Cambia 'completed' por 'paid' o añade ambos
+  status: 'pending' | 'paid' | 'overdue' | 'cancelled' | 'refunded' | 'completed';
+  date: Date | string;  // Cambia dueDate por date si eso es lo que usas
   paidDate?: Date | string;
-  method?: 'cash' | 'transfer' | 'card' | 'online';
+  method?: 'cash' | 'transfer' | 'card' | 'online' | 'check';
   reference?: string;
   invoiceNumber?: string;
+  notes?: string;  // Añade notes si lo necesitas
+  createdBy?: string;  // Añade si lo necesitas
   createdAt: Date | string;
   updatedAt: Date | string;
 }
@@ -884,6 +886,8 @@ export interface MatchEvent {
   playerNumber?: number;
   description?: string;
 }
+
+
 
 // Tipos para gestión de pagos móvil
 export interface MobilePayment {

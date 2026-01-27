@@ -10,7 +10,6 @@ import {
   ArrowLeftIcon,
   ChevronRightIcon,
   DocumentIcon,
-  EyeIcon,
   LinkIcon
 } from '@heroicons/react/24/outline';
 import Modal from '../components/common/Modal';
@@ -38,7 +37,7 @@ const Divisions: React.FC = () => {
     order: 1,
     teamLimit: 20,
     playerLimit: 15,
-    rulesUrl: '', // URL del PDF de reglamento
+    rulesUrl: '/assets/reglamentoprime.pdf', // URL del PDF de reglamento
     isActive: true,
   });
 
@@ -83,14 +82,20 @@ const Divisions: React.FC = () => {
 
   const handleCreateDivision = async () => {
     try {
+      // Validar campos requeridos
+      if (!newDivision.seasonId || !newDivision.name.trim()) {
+        setNotification({ type: 'error', message: 'Temporada y nombre son campos requeridos' });
+        return;
+      }
+
       const divisionData = {
         seasonId: newDivision.seasonId,
         name: newDivision.name.trim(),
         description: newDivision.description.trim(),
         color: newDivision.color,
         order: newDivision.order,
-        teamLimit: newDivision.teamLimit,
-        playerLimit: newDivision.playerLimit,
+        teamLimit: newDivision.teamLimit || 1, // Asegurar mínimo 1
+        playerLimit: newDivision.playerLimit || 1, // Asegurar mínimo 1
         rulesUrl: newDivision.rulesUrl.trim(),
         isActive: newDivision.isActive,
         createdAt: new Date().toISOString(),
@@ -113,13 +118,19 @@ const Divisions: React.FC = () => {
     if (!editingDivision) return;
 
     try {
+      // Validar campos requeridos
+      if (!newDivision.name.trim()) {
+        setNotification({ type: 'error', message: 'El nombre es requerido' });
+        return;
+      }
+
       await divisionsService.updateDivision(editingDivision.id, {
         name: newDivision.name.trim(),
         description: newDivision.description.trim(),
         color: newDivision.color,
         order: newDivision.order,
-        teamLimit: newDivision.teamLimit,
-        playerLimit: newDivision.playerLimit,
+        teamLimit: newDivision.teamLimit || 1, // Asegurar mínimo 1
+        playerLimit: newDivision.playerLimit || 1, // Asegurar mínimo 1
         rulesUrl: newDivision.rulesUrl.trim(),
         isActive: newDivision.isActive,
         updatedAt: new Date().toISOString(),
@@ -206,6 +217,35 @@ const Divisions: React.FC = () => {
       type => !types.includes(type)
     );
     return availableTypes;
+  };
+
+  // Función para manejar cambios en los límites (permite vacío temporalmente)
+  const handleTeamLimitChange = (value: string) => {
+    // Permitir vacío temporalmente para que el usuario pueda borrar completamente
+    if (value === '') {
+      setNewDivision({ ...newDivision, teamLimit: 0 });
+      return;
+    }
+    
+    const numValue = parseInt(value);
+    // Solo actualizar si es un número válido y mayor que 0
+    if (!isNaN(numValue) && numValue > 0) {
+      setNewDivision({ ...newDivision, teamLimit: numValue });
+    }
+  };
+
+  const handlePlayerLimitChange = (value: string) => {
+    // Permitir vacío temporalmente para que el usuario pueda borrar completamente
+    if (value === '') {
+      setNewDivision({ ...newDivision, playerLimit: 0 });
+      return;
+    }
+    
+    const numValue = parseInt(value);
+    // Solo actualizar si es un número válido y mayor que 0
+    if (!isNaN(numValue) && numValue > 0) {
+      setNewDivision({ ...newDivision, playerLimit: numValue });
+    }
   };
 
   if (loading) {
@@ -444,13 +484,6 @@ const Divisions: React.FC = () => {
                         </button>
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => navigate(`/divisiones/${division.id}`)}
-                            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Ver detalles"
-                          >
-                            <EyeIcon className="w-4 h-4" />
-                          </button>
-                          <button
                             onClick={() => editDivision(division)}
                             className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Editar"
@@ -569,12 +602,13 @@ const Divisions: React.FC = () => {
               </label>
               <input
                 type="number"
-                value={newDivision.teamLimit}
-                onChange={(e) => setNewDivision({ ...newDivision, teamLimit: parseInt(e.target.value) || 20 })}
+                value={newDivision.teamLimit === 0 ? '' : newDivision.teamLimit}
+                onChange={(e) => handleTeamLimitChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 min="1"
                 max="50"
               />
+              <p className="text-xs text-gray-500 mt-1">0 para ilimitado, mínimo 1</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -582,12 +616,13 @@ const Divisions: React.FC = () => {
               </label>
               <input
                 type="number"
-                value={newDivision.playerLimit}
-                onChange={(e) => setNewDivision({ ...newDivision, playerLimit: parseInt(e.target.value) || 15 })}
+                value={newDivision.playerLimit === 0 ? '' : newDivision.playerLimit}
+                onChange={(e) => handlePlayerLimitChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 min="1"
                 max="30"
               />
+              <p className="text-xs text-gray-500 mt-1">0 para ilimitado, mínimo 1</p>
             </div>
           </div>
 
@@ -642,7 +677,7 @@ const Divisions: React.FC = () => {
             </button>
             <button
               onClick={handleCreateDivision}
-              disabled={!newDivision.seasonId || !newDivision.name.trim()}
+              disabled={!newDivision.seasonId || !newDivision.name.trim() || newDivision.teamLimit === 0 || newDivision.playerLimit === 0}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Crear División
@@ -722,12 +757,13 @@ const Divisions: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  value={newDivision.teamLimit}
-                  onChange={(e) => setNewDivision({ ...newDivision, teamLimit: parseInt(e.target.value) || 20 })}
+                  value={newDivision.teamLimit === 0 ? '' : newDivision.teamLimit}
+                  onChange={(e) => handleTeamLimitChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   min="1"
                   max="50"
                 />
+                <p className="text-xs text-gray-500 mt-1">0 para ilimitado, mínimo 1</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -735,12 +771,13 @@ const Divisions: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  value={newDivision.playerLimit}
-                  onChange={(e) => setNewDivision({ ...newDivision, playerLimit: parseInt(e.target.value) || 15 })}
+                  value={newDivision.playerLimit === 0 ? '' : newDivision.playerLimit}
+                  onChange={(e) => handlePlayerLimitChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   min="1"
                   max="30"
                 />
+                <p className="text-xs text-gray-500 mt-1">0 para ilimitado, mínimo 1</p>
               </div>
             </div>
 
@@ -794,7 +831,7 @@ const Divisions: React.FC = () => {
               </button>
               <button
                 onClick={handleUpdateDivision}
-                disabled={!newDivision.name.trim()}
+                disabled={!newDivision.name.trim() || newDivision.teamLimit === 0 || newDivision.playerLimit === 0}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Actualizar División

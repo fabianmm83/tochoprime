@@ -76,7 +76,7 @@ const Dashboard: React.FC = () => {
       color: 'bg-indigo-500',
       ruta: '/categorias',
       rolesPermitidos: ['superadministrador', 'admin'],
-      etiqueta: 'Global'
+      etiqueta: 'Activo'
     },
     {
       titulo: 'Campos',
@@ -115,7 +115,7 @@ const Dashboard: React.FC = () => {
   color: 'bg-emerald-500',
   ruta: '/capitan',
   rolesPermitidos: ['capitan'],
-  etiqueta: 'Panel'
+  etiqueta: 'Activo'
 },
 
 
@@ -127,7 +127,7 @@ const Dashboard: React.FC = () => {
   color: 'bg-yellow-500',
   ruta: '/tabla-posiciones',
   rolesPermitidos: ['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro'],
-  etiqueta: 'Live'
+  etiqueta: 'Activo'
 },
 {
   titulo: 'Marcador en Vivo',
@@ -142,11 +142,11 @@ const Dashboard: React.FC = () => {
     {
   titulo: 'Panel de Administrador',
   descripcion: 'Dashboard administrativo con estadísticas y gestión',
-  icono: ShieldCheckIcon, // O usa Cog6ToothIcon si prefieres
+  icono: ShieldCheckIcon, 
   color: 'bg-purple-500',
   ruta: '/admin',
   rolesPermitidos: ['superadministrador', 'admin'],
-  etiqueta: 'Panel'
+  etiqueta: 'Activo'
 },
     // Sistema de Competencia - Fase 3 ✅
     {
@@ -184,7 +184,7 @@ const Dashboard: React.FC = () => {
   color: 'bg-amber-500',
   ruta: '/arbitro', // ← Esta ruta es para ÁRBITROS
   rolesPermitidos: ['arbitro'], // Solo árbitros
-  etiqueta: 'Panel'
+  etiqueta: 'Activo'
 },
 
   {
@@ -194,18 +194,18 @@ const Dashboard: React.FC = () => {
   color: 'bg-blue-500',
   ruta: '/jugador',
   rolesPermitidos: ['jugador'],
-  etiqueta: 'Panel'
+  etiqueta: 'Activo'
 },
 
-    // Sistema Antiguo (Compatibilidad)
+    
     {
       titulo: 'Ligas',
-      descripcion: 'Sistema antiguo de gestión de ligas',
+      descripcion: 'Sistema de gestión de ligas (desarrollo)',
       icono: BuildingLibraryIcon,
       color: 'bg-gray-500',
       ruta: '/ligas',
       rolesPermitidos: ['superadministrador', 'admin'],
-      etiqueta: 'Legado'
+      proximamente: true
     },
 
     // Funcionalidades Futuras - Fase 4
@@ -491,58 +491,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Actions based on Role */}
-        {(rolUsuario === 'superadministrador' || rolUsuario === 'admin') && (
-          <div className="mt-8">
-            <h3 className="font-semibold text-gray-900 mb-4">Acciones Rápidas</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => navigate('/temporadas/nueva')}
-                className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium"
-              >
-                + Nueva Temporada
-              </button>
-              <button
-                onClick={() => navigate('/equipos/nuevo')}
-                className="px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 active:scale-95 transition-all text-sm font-medium"
-              >
-                + Nuevo Equipo
-              </button>
-              <button
-                onClick={() => navigate('/partidos/nuevo')}
-                className="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 active:scale-95 transition-all text-sm font-medium"
-              >
-                + Nuevo Partido
-              </button>
-              <button
-                onClick={() => navigate('/jugadores/nuevo')}
-                className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:scale-95 transition-all text-sm font-medium"
-              >
-                + Nuevo Jugador
-              </button>
-            </div>
-          </div>
-        )}
-
-        {rolUsuario === 'capitan' && (
-          <div className="mt-8">
-            <h3 className="font-semibold text-gray-900 mb-4">Acciones Rápidas</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => navigate('/jugadores/nuevo')}
-                className="px-4 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 active:scale-95 transition-all text-sm font-medium"
-              >
-                + Registrar Jugador
-              </button>
-              <button
-                onClick={() => navigate('/calendario')}
-                className="px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 active:scale-95 transition-all text-sm font-medium"
-              >
-                Ver Calendario
-              </button>
-            </div>
-          </div>
-        )}
+      
       </div>
 
       {/* Bottom Padding for Mobile Navigation */}

@@ -23,7 +23,8 @@ import {
   Player,
   Match,
   Referee,
-  CalendarEvent
+  CalendarEvent,
+  Payment
 } from '../types';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -342,6 +343,32 @@ export const divisionsService = {
       throw error;
     }
   },
+
+
+  getAllDivisions: async (): Promise<Division[]> => {
+    try {
+      const divisionsRef = collection(db, 'divisions');
+      const q = query(divisionsRef, orderBy('order', 'asc'));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Division;
+      });
+    } catch (error) {
+      console.error('Error fetching all divisions:', error);
+      throw error;
+    }
+  },
+
+
+
+
 };
 
 // Servicio para Categorías
@@ -2523,6 +2550,163 @@ export const storageService = {
     }
   }
 };
+
+
+// Servicio para Pagos
+export const paymentsService = {
+  // Crear pago
+  async createPayment(paymentData: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    try {
+      const paymentsRef = collection(db, 'payments');
+      const newPayment = {
+        ...paymentData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      
+      const docRef = await addDoc(paymentsRef, newPayment);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating payment:', error);
+      throw error;
+    }
+  },
+
+  // Obtener pagos por equipo
+  async getPaymentsByTeam(teamId: string): Promise<Payment[]> {
+    try {
+      const paymentsRef = collection(db, 'payments');
+      const q = query(
+        paymentsRef, 
+        where('teamId', '==', teamId),
+        orderBy('date', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          date: parseFirestoreDate(data.date),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Payment;
+      });
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      throw error;
+    }
+  },
+
+  // Obtener pagos por temporada
+  async getPaymentsBySeason(seasonId: string): Promise<Payment[]> {
+    try {
+      // Primero obtener todos los equipos de la temporada
+      const teams = await teamsService.getTeamsBySeason(seasonId);
+      const allPayments: Payment[] = [];
+      
+      // Para cada equipo, obtener sus pagos
+      for (const team of teams) {
+        const teamPayments = await this.getPaymentsByTeam(team.id);
+        allPayments.push(...teamPayments);
+      }
+      
+      return allPayments.sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+    } catch (error) {
+      console.error('Error fetching payments by season:', error);
+      throw error;
+    }
+  },
+
+  // Obtener pago por ID
+  async getPaymentById(id: string): Promise<Payment | null> {
+    try {
+      const paymentRef = doc(db, 'payments', id);
+      const paymentDoc = await getDoc(paymentRef);
+      
+      if (paymentDoc.exists()) {
+        const data = paymentDoc.data();
+        return {
+          id: paymentDoc.id,
+          ...data,
+          date: parseFirestoreDate(data.date),
+          createdAt: parseFirestoreDate(data.createdAt),
+          updatedAt: parseFirestoreDate(data.updatedAt),
+        } as Payment;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching payment:', error);
+      throw error;
+    }
+  },
+
+  // Actualizar pago
+  async updatePayment(id: string, paymentData: Partial<Payment>): Promise<void> {
+    try {
+      const paymentRef = doc(db, 'payments', id);
+      await updateDoc(paymentRef, {
+        ...paymentData,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      throw error;
+    }
+  },
+
+  // Eliminar pago
+  async deletePayment(id: string): Promise<void> {
+    try {
+      const paymentRef = doc(db, 'payments', id);
+      await deleteDoc(paymentRef);
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      throw error;
+    }
+  },
+
+  // Obtener resumen de pagos por equipo
+  // En paymentsService.getPaymentSummary, corregir el tipo de lastPayment:
+async getPaymentSummary(teamId: string): Promise<{
+  totalPaid: number;
+  lastPayment: Date | null; // ← Ya está bien
+  paymentsCount: number;
+}> {
+  try {
+    const payments = await this.getPaymentsByTeam(teamId);
+    const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    
+    // Asegurar que lastPayment sea Date | null
+    let lastPayment: Date | null = null;
+    if (payments.length > 0) {
+      const lastPaymentDate = payments[0].date; // asumiendo que está ordenado por fecha descendente
+      
+      // Convertir a Date si es string
+      lastPayment = typeof lastPaymentDate === 'string' 
+        ? new Date(lastPaymentDate) 
+        : lastPaymentDate;
+    }
+    
+    return {
+      totalPaid,
+      lastPayment,
+      paymentsCount: payments.length
+    };
+  } catch (error) {
+    console.error('Error getting payment summary:', error);
+    throw error;
+  }
+}
+};
+
+
+
+
+
 
 
 

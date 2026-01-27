@@ -38,6 +38,8 @@ out/
 .env.test.local
 .env.production.local
 .env.*.local
+.env.node
+
 
 # Editor directories and files
 .vscode/*
