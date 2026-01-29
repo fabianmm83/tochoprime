@@ -51,64 +51,18 @@ const Dashboard: React.FC = () => {
 
   const menuItems: MenuItem[] = [
     // Sistema jerárquico - Fase 1 ✅
-    {
-      titulo: 'Temporadas',
-      descripcion: 'Gestiona temporadas (Primavera 2024, Otoño 2024, etc.)',
-      icono: CalendarIcon,
-      color: 'bg-blue-500',
-      ruta: '/temporadas',
-      rolesPermitidos: ['superadministrador', 'admin'],
-      etiqueta: 'Activo'
-    },
-    {
-      titulo: 'Divisiones',
-      descripcion: 'Configura divisiones (Varonil, Femenil, Mixto)',
-      icono: UserGroupIcon,
-      color: 'bg-purple-500',
-      ruta: '/divisiones',
-      rolesPermitidos: ['superadministrador', 'admin'],
-      etiqueta: 'Activo'
-    },
-    {
-      titulo: 'Categorías',
-      descripcion: 'Gestiona categorías de liga por división',
-      icono: TagIcon,
-      color: 'bg-indigo-500',
-      ruta: '/categorias',
-      rolesPermitidos: ['superadministrador', 'admin'],
-      etiqueta: 'Activo'
-    },
-    {
-      titulo: 'Campos',
-      descripcion: 'Administra los 16+ campos deportivos disponibles',
-      icono: MapPinIcon,
-      color: 'bg-green-500',
-      ruta: '/campos',
-      rolesPermitidos: ['superadministrador', 'admin'],
-      etiqueta: 'Activo'
-    },
-
-    // Equipos y Jugadores - Fase 2 ✅
-    {
-      titulo: 'Equipos',
-      descripcion: 'Gestiona equipos por categoría',
-      icono: TrophyIcon,
-      color: 'bg-yellow-500',
-      ruta: '/equipos',
-      rolesPermitidos: ['superadministrador', 'admin', 'capitan'],
-      etiqueta: 'Activo'
-    },
-    {
-      titulo: 'Jugadores',
-      descripcion: 'Registro y gestión de jugadores',
-      icono: UsersIcon,
-      color: 'bg-pink-500',
-      ruta: '/jugadores',
-      rolesPermitidos: ['superadministrador', 'admin', 'capitan'],
-      etiqueta: 'Activo'
-    },
 
     {
+  titulo: 'Panel de Administrador',
+  descripcion: 'Dashboard administrativo con estadísticas y gestión del negocio',
+  icono: ShieldCheckIcon, 
+  color: 'bg-purple-500',
+  ruta: '/admin',
+  rolesPermitidos: ['superadministrador', 'admin'],
+  etiqueta: 'Activo'
+},
+
+     {
   titulo: 'Mi Panel de Capitán',
   descripcion: 'Gestiona mi equipo, jugadores y pagos',
   icono: ShieldCheckIcon, // O usa TrophyIcon si prefieres
@@ -117,45 +71,58 @@ const Dashboard: React.FC = () => {
   rolesPermitidos: ['capitan'],
   etiqueta: 'Activo'
 },
-
-
-    // En el array menuItems de tu Dashboard, agrega:
-{
-  titulo: 'Tablas de Posiciones',
-  descripcion: 'Consulta las tablas de posiciones de la liga',
-  icono: TrophyIcon, 
-  color: 'bg-yellow-500',
-  ruta: '/tabla-posiciones',
-  rolesPermitidos: ['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro'],
+    {
+   titulo: 'Mi Panel de Árbitro',
+  descripcion: 'Gestiona mis partidos asignados y reportes',
+  icono: ShieldCheckIcon, 
+  color: 'bg-amber-500',
+  ruta: '/arbitro', // ← Esta ruta es para ÁRBITROS
+  rolesPermitidos: ['arbitro'], // Solo árbitros
   etiqueta: 'Activo'
 },
-{
-  titulo: 'Marcador en Vivo',
-  descripcion: 'Sistema para árbitros - registro en tiempo real',
-  icono: TrophyIcon, // O usa ClockIcon
-  color: 'bg-green-500',
-  ruta: '/marcador-en-vivo',
-  rolesPermitidos: ['superadministrador', 'admin', 'arbitro'],
-  etiqueta: 'Live'
+
+
+     
+
+    
+
+  {
+  titulo: 'Mi Panel de Jugador',
+  descripcion: 'Panel personalizado para ver mis partidos y estadísticas',
+  icono: UserIcon,
+  color: 'bg-blue-500',
+  ruta: '/jugador',
+  rolesPermitidos: ['jugador'],
+  etiqueta: 'Activo'
 },
 
     {
-  titulo: 'Panel de Administrador',
-  descripcion: 'Dashboard administrativo con estadísticas y gestión',
-  icono: ShieldCheckIcon, 
-  color: 'bg-purple-500',
-  ruta: '/admin',
-  rolesPermitidos: ['superadministrador', 'admin'],
-  etiqueta: 'Activo'
-},
-    // Sistema de Competencia - Fase 3 ✅
+      titulo: 'Temporadas',
+      descripcion: 'Gestiona temporadas (Primavera 2026, Otoño 2026, etc.)',
+      icono: CalendarIcon,
+      color: 'bg-blue-500',
+      ruta: '/temporadas',
+      rolesPermitidos: ['superadministrador', 'admin'],
+      etiqueta: 'Activo'
+    },
+
     {
       titulo: 'Partidos',
-      descripcion: 'Programa y gestiona partidos',
+      descripcion: 'Programa y gestiona partidos ',
       icono: DocumentTextIcon,
       color: 'bg-red-500',
       ruta: '/partidos',
       rolesPermitidos: ['superadministrador', 'admin', 'arbitro'],
+      etiqueta: 'Activo'
+    },
+
+    {
+      titulo: 'Equipos',
+      descripcion: 'Gestiona todos los equipos (pagos, roster, etc.)',
+      icono: TrophyIcon,
+      color: 'bg-yellow-500',
+      ruta: '/equipos',
+      rolesPermitidos: ['superadministrador', 'admin', 'capitan'],
       etiqueta: 'Activo'
     },
     {
@@ -176,28 +143,77 @@ const Dashboard: React.FC = () => {
       rolesPermitidos: ['superadministrador', 'admin'],
       etiqueta: 'Activo'
     },
+    {
+  titulo: 'Tablas de Posiciones',
+  descripcion: 'Consulta las tablas de posiciones de la liga',
+  icono: TrophyIcon, 
+  color: 'bg-yellow-500',
+  ruta: '/tabla-posiciones',
+  rolesPermitidos: ['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro'],
+  etiqueta: 'Activo'
+},
+    {
+      titulo: 'Campos',
+      descripcion: 'Administra los 16+ campos deportivos disponibles',
+      icono: MapPinIcon,
+      color: 'bg-green-500',
+      ruta: '/campos',
+      rolesPermitidos: ['superadministrador', 'admin'],
+      etiqueta: 'Activo'
+    },
 
     {
-   titulo: 'Mi Panel de Árbitro',
-  descripcion: 'Gestiona mis partidos asignados y reportes',
-  icono: ShieldCheckIcon, 
-  color: 'bg-amber-500',
-  ruta: '/arbitro', // ← Esta ruta es para ÁRBITROS
-  rolesPermitidos: ['arbitro'], // Solo árbitros
-  etiqueta: 'Activo'
-},
-
-  {
-  titulo: 'Mi Panel de Jugador',
-  descripcion: 'Panel personalizado para ver mis partidos y estadísticas',
-  icono: UserIcon,
-  color: 'bg-blue-500',
-  ruta: '/jugador',
-  rolesPermitidos: ['jugador'],
-  etiqueta: 'Activo'
-},
-
+      titulo: 'Divisiones',
+      descripcion: 'Configura divisiones (Varonil, Femenil, Mixto)',
+      icono: UserGroupIcon,
+      color: 'bg-purple-500',
+      ruta: '/divisiones',
+      rolesPermitidos: ['superadministrador', 'admin'],
+      etiqueta: 'Activo'
+    },
+    {
+      titulo: 'Categorías',
+      descripcion: 'Gestiona categorías de liga por división',
+      icono: TagIcon,
+      color: 'bg-indigo-500',
+      ruta: '/categorias',
+      rolesPermitidos: ['superadministrador', 'admin'],
+      etiqueta: 'Activo'
+    },
     
+
+   
+    {
+      titulo: 'Jugadores',
+      descripcion: 'Registro y gestión de jugadores',
+      icono: UsersIcon,
+      color: 'bg-pink-500',
+      ruta: '/jugadores',
+      rolesPermitidos: ['superadministrador', 'admin', 'capitan'],
+      etiqueta: 'Activo'
+    },
+
+   
+
+{
+  titulo: 'Marcador en Vivo',
+  descripcion: 'Sistema para árbitros - registro en tiempo real',
+  icono: TrophyIcon, // O usa ClockIcon
+  color: 'bg-green-500',
+  ruta: '/marcador-en-vivo',
+  rolesPermitidos: ['superadministrador', 'admin', 'arbitro'],
+  proximamente: true
+},
+
+    {
+      titulo: 'Finanzas',
+      descripcion: 'Sistema de gestión de pagos y cuotas',
+      icono: CurrencyDollarIcon,
+      color: 'bg-emerald-500',
+      ruta: '/finanzas',
+      rolesPermitidos: ['superadministrador', 'admin'],
+      proximamente: true
+    },
     {
       titulo: 'Ligas',
       descripcion: 'Sistema de gestión de ligas (desarrollo)',
@@ -207,14 +223,22 @@ const Dashboard: React.FC = () => {
       rolesPermitidos: ['superadministrador', 'admin'],
       proximamente: true
     },
-
-    // Funcionalidades Futuras - Fase 4
+{
+      titulo: 'Estadísticas',
+      descripcion: 'Estadísticas de jugadores y equipos',
+      icono: ChartBarIcon,
+      color: 'bg-cyan-500',
+      ruta: '/estadisticas',
+      rolesPermitidos: ['superadministrador', 'admin', 'capitan', 'jugador'],
+      proximamente: true
+    },
+    
     {
-      titulo: 'Finanzas',
-      descripcion: 'Sistema de gestión de pagos y cuotas',
-      icono: CurrencyDollarIcon,
-      color: 'bg-emerald-500',
-      ruta: '/finanzas',
+      titulo: 'Reportes',
+      descripcion: 'Genera reportes y análisis',
+      icono: ClipboardDocumentListIcon,
+      color: 'bg-violet-500',
+      ruta: '/reportes',
       rolesPermitidos: ['superadministrador', 'admin'],
       proximamente: true
     },
@@ -236,24 +260,8 @@ const Dashboard: React.FC = () => {
       rolesPermitidos: ['espectador', 'todos'],
       proximamente: true
     },
-    {
-      titulo: 'Estadísticas',
-      descripcion: 'Estadísticas de jugadores y equipos',
-      icono: ChartBarIcon,
-      color: 'bg-cyan-500',
-      ruta: '/estadisticas',
-      rolesPermitidos: ['superadministrador', 'admin', 'capitan', 'jugador'],
-      proximamente: true
-    },
-    {
-      titulo: 'Reportes',
-      descripcion: 'Genera reportes y análisis',
-      icono: ClipboardDocumentListIcon,
-      color: 'bg-violet-500',
-      ruta: '/reportes',
-      rolesPermitidos: ['superadministrador', 'admin'],
-      proximamente: true
-    },
+    
+    
     {
       titulo: 'Notificaciones',
       descripcion: 'Notificaciones y alertas del sistema',
