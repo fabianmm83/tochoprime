@@ -34,7 +34,21 @@ const MatchSchedulerPage: React.FC = () => {
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [selectedDivision, setSelectedDivision] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [isDoubleRoundRobin, setIsDoubleRoundRobin] = useState(true);
+  const [useAvailableFieldsOnly, setUseAvailableFieldsOnly] = useState(true);
+  const [useGroups, setUseGroups] = useState(false);
+  const [groupSize, setGroupSize] = useState<number>(9);
+  const [generateByRound, setGenerateByRound] = useState(false); // Nueva opción
+  
+  // Fecha de inicio (siempre domingo)
+  const [startDate, setStartDate] = useState<Date>(() => {
+    // Por defecto, próximo domingo
+    const nextSunday = new Date();
+    const dayOfWeek = nextSunday.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+    const daysUntilSunday = (0 - dayOfWeek + 7) % 7 || 7;
+    nextSunday.setDate(nextSunday.getDate() + daysUntilSunday);
+    nextSunday.setHours(0, 0, 0, 0);
+    return nextSunday;
+  });
   
   // Estadísticas
   const [divisionStats, setDivisionStats] = useState<{[key: string]: {
@@ -78,6 +92,37 @@ const MatchSchedulerPage: React.FC = () => {
       console.error('Error formatting date:', error);
       return 'Fecha inválida';
     }
+  };
+  
+  // Función para formatear fecha completa
+  const formatDateFull = (date: Date): string => {
+    return format(date, "EEEE dd 'de' MMMM 'de' yyyy", { locale: es });
+  };
+  
+  // Función para formatear fecha para input
+  const formatDateForInput = (date: Date): string => {
+    return format(date, 'yyyy-MM-dd');
+  };
+  
+  // Función para ajustar al próximo domingo
+  const setToNextSunday = () => {
+    const nextSunday = new Date();
+    const dayOfWeek = nextSunday.getDay();
+    const daysUntilSunday = (0 - dayOfWeek + 7) % 7 || 7;
+    nextSunday.setDate(nextSunday.getDate() + daysUntilSunday);
+    nextSunday.setHours(0, 0, 0, 0);
+    setStartDate(nextSunday);
+  };
+  
+  // Manejar cambio de fecha (ajustar automáticamente a domingo)
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedDate = new Date(e.target.value);
+    // Ajustar automáticamente al domingo más cercano
+    const dayOfWeek = selectedDate.getDay();
+    const daysUntilSunday = (0 - dayOfWeek + 7) % 7;
+    selectedDate.setDate(selectedDate.getDate() + daysUntilSunday);
+    selectedDate.setHours(0, 0, 0, 0);
+    setStartDate(selectedDate);
   };
   
   const loadSeasons = async () => {
@@ -168,21 +213,25 @@ const MatchSchedulerPage: React.FC = () => {
     try {
       setGenerating(true);
       
-      // Si hay categoría seleccionada, usar solo esos equipos
-      const teamsToUse = selectedCategory 
-        ? filteredTeams 
-        : teams;
-      
+      // Usar la NUEVA función con todos los parámetros
       await matchesService.generateSeasonCalendar(
         selectedSeason,
         selectedDivision,
-        teamsToUse,
-        isDoubleRoundRobin
+        filteredTeams,
+        startDate,
+        useAvailableFieldsOnly,
+        useGroups,
+        groupSize,
+        generateByRound
       );
+      
+      const message = generateByRound 
+        ? `Partidos generados exitosamente para la jornada del ${formatDateFull(startDate)}`
+        : `Calendario generado exitosamente para ${filteredTeams.length} equipos (9 domingos consecutivos)`;
       
       setNotification({
         type: 'success',
-        message: `Calendario generado exitosamente para ${teamsToUse.length} equipos`
+        message
       });
       
       // Redirigir a la lista de partidos después de 2 segundos
@@ -190,11 +239,11 @@ const MatchSchedulerPage: React.FC = () => {
         navigate('/partidos');
       }, 2000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating calendar:', error);
       setNotification({
         type: 'error',
-        message: 'Error al generar el calendario'
+        message: error.message || 'Error al generar el calendario'
       });
     } finally {
       setGenerating(false);
@@ -220,6 +269,33 @@ const MatchSchedulerPage: React.FC = () => {
       default: return status;
     }
   };
+  
+  // Calcular información del calendario
+  const calculateCalendarInfo = () => {
+    const teamCount = filteredTeams.length;
+    const TOTAL_JORNADAS = 9;
+    const PARTIDOS_POR_EQUIPO = 8;
+    
+    if (teamCount < 2) return null;
+    
+    let formulaInfo = '';
+    if (teamCount >= 9) {
+      formulaInfo = `Fórmula especial para ${teamCount} equipos: 8 partidos por equipo`;
+    } else {
+      formulaInfo = `Round-robin adaptado para ${teamCount} equipos`;
+    }
+    
+    return {
+      teamCount,
+      jornadas: TOTAL_JORNADAS,
+      partidosPorEquipo: PARTIDOS_POR_EQUIPO,
+      formulaInfo,
+      totalPartidos: Math.floor(TOTAL_JORNADAS * teamCount / 2),
+      startDateFormatted: formatDateFull(startDate)
+    };
+  };
+  
+  const calendarInfo = calculateCalendarInfo();
   
   if (loading) return <LoadingSpinner />;
   
@@ -351,24 +427,113 @@ const MatchSchedulerPage: React.FC = () => {
               </p>
             </div>
             
-            {/* Opciones */}
+            {/* Fecha de inicio */}
             <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fecha de inicio (Siempre Domingo) *
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="date"
+                  value={formatDateForInput(startDate)}
+                  onChange={handleStartDateChange}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                />
+                <button
+                  onClick={setToNextSunday}
+                  className="px-3 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                >
+                  Próximo Domingo
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-gray-600">
+                <span className="font-medium">Fecha ajustada:</span> {formatDateFull(startDate)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {generateByRound 
+                  ? 'Se generarán partidos solo para esta fecha específica'
+                  : 'El calendario se generará para 9 domingos consecutivos empezando esta fecha'
+                }
+              </p>
+            </div>
+            
+            {/* Opciones avanzadas */}
+            <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Opciones Avanzadas</h3>
+              
+              {/* Generar por jornada */}
               <div className="flex items-center mb-4">
                 <input
                   type="checkbox"
-                  id="doubleRoundRobin"
-                  checked={isDoubleRoundRobin}
-                  onChange={(e) => setIsDoubleRoundRobin(e.target.checked)}
+                  id="generateByRound"
+                  checked={generateByRound}
+                  onChange={(e) => setGenerateByRound(e.target.checked)}
                   className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
-                <label htmlFor="doubleRoundRobin" className="ml-2 text-sm font-medium text-gray-700">
-                  Generar doble round-robin (ida y vuelta)
+                <label htmlFor="generateByRound" className="ml-2 text-sm font-medium text-gray-700">
+                  Generar solo para esta jornada (fecha seleccionada)
+                </label>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Si se marca, solo se generarán partidos para la fecha seleccionada, no para 9 domingos consecutivos.
+                Útil para reprogramar o generar jornadas específicas.
+              </p>
+              
+              {/* Usar sistema de grupos */}
+              <div className="flex items-center mb-4">
+                <input
+                  type="checkbox"
+                  id="useGroups"
+                  checked={useGroups}
+                  onChange={(e) => setUseGroups(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  disabled={generateByRound}
+                />
+                <label htmlFor="useGroups" className="ml-2 text-sm font-medium text-gray-700">
+                  Usar sistema de grupos
+                </label>
+              </div>
+              
+              {useGroups && !generateByRound && (
+                <div className="mb-4 ml-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tamaño máximo por grupo
+                  </label>
+                  <select
+                    value={groupSize}
+                    onChange={(e) => setGroupSize(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="6">6 equipos</option>
+                    <option value="7">7 equipos</option>
+                    <option value="8">8 equipos</option>
+                    <option value="9">9 equipos</option>
+                    <option value="10">10 equipos</option>
+                    <option value="12">12 equipos</option>
+                    <option value="14">14 equipos</option>
+                    <option value="16">16 equipos</option>
+                  </select>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Se crearán grupos automáticamente cuando haya más equipos que este tamaño.
+                  </p>
+                </div>
+              )}
+              
+              {/* Usar campos disponibles */}
+              <div className="flex items-center mb-4">
+                <input
+                  type="checkbox"
+                  id="useAvailableFieldsOnly"
+                  checked={useAvailableFieldsOnly}
+                  onChange={(e) => setUseAvailableFieldsOnly(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="useAvailableFieldsOnly" className="ml-2 text-sm font-medium text-gray-700">
+                  Usar solo campos disponibles (status = available)
                 </label>
               </div>
               <p className="text-sm text-gray-600">
-                {isDoubleRoundRobin 
-                  ? 'Cada equipo jugará contra todos los demás dos veces (ida y vuelta).'
-                  : 'Cada equipo jugará contra todos los demás una vez.'}
+                Si se desmarca, se usarán todos los campos sin importar su estado.
               </p>
             </div>
             
@@ -376,7 +541,7 @@ const MatchSchedulerPage: React.FC = () => {
             <button
               onClick={handleGenerateCalendar}
               disabled={generating || !selectedDivision || filteredTeams.length < 2}
-              className="w-full px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="w-full px-6 py-3 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               {generating ? (
                 <>
@@ -391,10 +556,24 @@ const MatchSchedulerPage: React.FC = () => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  <span>Generar Calendario</span>
+                  <span>
+                    {generateByRound ? 'Generar Jornada' : 'Generar Calendario Completo'}
+                  </span>
                 </>
               )}
             </button>
+            
+            {/* Información adicional */}
+            <div className="mt-4 text-sm text-gray-600">
+              <p className="font-medium mb-1">Notas:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Todos los partidos se generarán para domingos</li>
+                <li>Horarios: 7:00 AM - 4:00 PM</li>
+                <li>8 partidos por equipo (excepto grupos de 9 con BYE)</li>
+                <li>Distribución automática entre Cuemanco y Zague</li>
+                <li>Los partidos existentes no serán eliminados</li>
+              </ul>
+            </div>
           </div>
           
           {/* Panel de información */}
@@ -437,37 +616,68 @@ const MatchSchedulerPage: React.FC = () => {
               ) : (
                 <div className="space-y-6">
                   {/* Resumen */}
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <h3 className="font-medium text-green-900 mb-2">Resumen del Calendario</h3>
+                  <div className="p-4 bg-emerald-50 rounded-lg">
+                    <h3 className="font-medium text-emerald-900 mb-2">Resumen del Calendario</h3>
                     <div className="space-y-2">
-                      <p className="text-green-800">
+                      <p className="text-emerald-800">
                         <span className="font-medium">División:</span> {selectedDivisionData?.name}
                       </p>
                       {selectedCategory ? (
                         <>
-                          <p className="text-green-800">
+                          <p className="text-emerald-800">
                             <span className="font-medium">Categoría:</span> {
                               categories.find(c => c.id === selectedCategory)?.name
                             }
                           </p>
-                          <p className="text-green-800">
+                          <p className="text-emerald-800">
                             <span className="font-medium">Equipos:</span> {filteredTeams.length}
                           </p>
                         </>
                       ) : (
-                        <p className="text-green-800">
+                        <p className="text-emerald-800">
                           <span className="font-medium">Equipos totales:</span> {teams.length} en {categories.length} categorías
                         </p>
                       )}
-                      <p className="text-green-800">
-                        <span className="font-medium">Tipo:</span> {isDoubleRoundRobin ? 'Doble round-robin' : 'Round-robin simple'}
+                      <p className="text-emerald-800">
+                        <span className="font-medium">Fecha de inicio:</span> {formatDateFull(startDate)}
+                      </p>
+                      <p className="text-emerald-800">
+                        <span className="font-medium">Modo:</span> {generateByRound ? 'Jornada única' : 'Calendario completo (9 jornadas)'}
+                      </p>
+                      <p className="text-emerald-800">
+                        <span className="font-medium">Sistema:</span> {useGroups ? `Grupos (máx ${groupSize} eq)` : 'Todos contra todos'}
                       </p>
                     </div>
                   </div>
                   
+                  {/* Información de fórmula */}
+                  {calendarInfo && (
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <h3 className="font-medium text-blue-900 mb-2">Fórmula de calendario</h3>
+                      <div className="space-y-1">
+                        <p className="text-blue-800">{calendarInfo.formulaInfo}</p>
+                        <p className="text-blue-800">
+                          <span className="font-medium">Partidos por equipo:</span> {calendarInfo.partidosPorEquipo}
+                        </p>
+                        <p className="text-blue-800">
+                          <span className="font-medium">Total de partidos estimados:</span> {calendarInfo.totalPartidos}
+                        </p>
+                        <p className="text-blue-800">
+                          <span className="font-medium">Duración total:</span> {generateByRound ? '1 jornada' : `${calendarInfo.jornadas} jornadas`}
+                        </p>
+                        <p className="text-blue-800">
+                          <span className="font-medium">Campos:</span> Distribuidos entre Cuemanco y Zague
+                        </p>
+                        <p className="text-blue-800">
+                          <span className="font-medium">Árbitros:</span> {useAvailableFieldsOnly ? 'Asignados si disponibles' : 'Opcionales'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Equipos */}
                   <div>
-                    <h3 className="font-medium text-gray-900 mb-3">Equipos</h3>
+                    <h3 className="font-medium text-gray-900 mb-3">Equipos ({filteredTeams.length})</h3>
                     <div className="max-h-60 overflow-y-auto">
                       {filteredTeams.length > 0 ? (
                         <div className="grid grid-cols-1 gap-2">
@@ -504,33 +714,49 @@ const MatchSchedulerPage: React.FC = () => {
                     </div>
                   </div>
                   
-                  {/* Cálculo de partidos */}
-                  {filteredTeams.length >= 2 && (
-                    <div className="p-4 bg-blue-50 rounded-lg">
-                      <h3 className="font-medium text-blue-900 mb-2">Cálculo de partidos</h3>
-                      <div className="space-y-1">
-                        <p className="text-blue-800">
-                          <span className="font-medium">Número de equipos:</span> {filteredTeams.length}
+                  {/* Calendario de fechas estimado */}
+                  {calendarInfo && !generateByRound && (
+                    <div className="p-4 bg-purple-50 rounded-lg">
+                      <h3 className="font-medium text-purple-900 mb-2">Calendario estimado (9 jornadas)</h3>
+                      <div className="space-y-2">
+                        <p className="text-purple-800">
+                          <span className="font-medium">Jornada 1:</span> {formatDateFull(startDate)}
                         </p>
-                        <p className="text-blue-800">
-                          <span className="font-medium">Partidos por equipo:</span> {isDoubleRoundRobin 
-                            ? `${filteredTeams.length - 1} × 2 = ${(filteredTeams.length - 1) * 2}`
-                            : filteredTeams.length - 1
-                          }
+                        <p className="text-purple-800">
+                          <span className="font-medium">Jornada 2:</span> {formatDateFull(new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000))}
                         </p>
-                        <p className="text-blue-800">
-                          <span className="font-medium">Total de partidos:</span> {
-                            isDoubleRoundRobin
-                              ? `${filteredTeams.length} × ${filteredTeams.length - 1} = ${filteredTeams.length * (filteredTeams.length - 1)}`
-                              : `${filteredTeams.length} × ${filteredTeams.length - 1} ÷ 2 = ${Math.floor(filteredTeams.length * (filteredTeams.length - 1) / 2)}`
-                          }
+                        <p className="text-purple-800">
+                          <span className="font-medium">Jornada 3:</span> {formatDateFull(new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000))}
                         </p>
-                        <p className="text-blue-800">
-                          <span className="font-medium">Jornadas estimadas:</span> {
-                            isDoubleRoundRobin
-                              ? `${(filteredTeams.length - 1) * 2}`
-                              : `${filteredTeams.length - 1}`
-                          }
+                        <p className="text-purple-800">
+                          <span className="font-medium">Jornada 4:</span> {formatDateFull(new Date(startDate.getTime() + 21 * 24 * 60 * 60 * 1000))}
+                        </p>
+                        <p className="text-purple-800">
+                          <span className="font-medium">Jornada 5:</span> {formatDateFull(new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000))}
+                        </p>
+                        <p className="text-purple-800">
+                          <span className="font-medium">Jornada 9:</span> {formatDateFull(new Date(startDate.getTime() + 56 * 24 * 60 * 60 * 1000))}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Información de jornada única */}
+                  {generateByRound && (
+                    <div className="p-4 bg-orange-50 rounded-lg">
+                      <h3 className="font-medium text-orange-900 mb-2">Jornada única</h3>
+                      <div className="space-y-2">
+                        <p className="text-orange-800">
+                          <span className="font-medium">Fecha:</span> {formatDateFull(startDate)}
+                        </p>
+                        <p className="text-orange-800">
+                          <span className="font-medium">Horarios:</span> 7:00 AM - 4:00 PM
+                        </p>
+                        <p className="text-orange-800">
+                          <span className="font-medium">Campos:</span> Distribución automática
+                        </p>
+                        <p className="text-orange-800">
+                          <span className="font-medium">Nota:</span> Solo se generarán partidos para esta fecha específica
                         </p>
                       </div>
                     </div>
@@ -548,12 +774,14 @@ const MatchSchedulerPage: React.FC = () => {
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">Advertencia</h3>
-                  <div className="mt-2 text-sm text-yellow-700">
-                    <p>
-                      Esta acción generará todos los partidos del calendario. Si ya existen partidos programados,
-                      se crearán partidos adicionales. Los partidos existentes no serán eliminados.
-                    </p>
+                  <h3 className="text-sm font-medium text-yellow-800">Información importante</h3>
+                  <div className="mt-2 text-sm text-yellow-700 space-y-1">
+                    <p>• <strong>Siempre se generarán partidos para domingos</strong></p>
+                    <p>• Horarios: <strong>7:00 AM - 4:00 PM</strong> (partidos de 1 hora)</p>
+                    <p>• Campos distribuidos entre <strong>Cuemanco y Zague</strong></p>
+                    <p>• <strong>8 partidos por equipo</strong> (excepto grupos de 9 con BYE)</p>
+                    <p>• Los partidos existentes <strong>no serán eliminados</strong></p>
+                    <p>• Si hay muchos equipos, considera usar <strong>sistema de grupos</strong></p>
                   </div>
                 </div>
               </div>

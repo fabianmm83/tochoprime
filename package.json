@@ -18,7 +18,10 @@
     "clean:all": "rm -rf dist .firebase firebase-debug.log",
     "deploy:force": "npm run clean && npm run build && firebase deploy --only hosting --force",
     "seed": "node src/scripts/seedTeams.js",
-    "seed:dev": "tsx src/scripts/seedTeams.ts"
+    "seed:dev": "tsx src/scripts/seedTeams.ts",
+      "delete-matches": "tsx src/scripts/deleteAllMatches.ts",
+    "delete-matches:force": "tsx src/scripts/deleteAllMatches.ts --force"
+
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.20",

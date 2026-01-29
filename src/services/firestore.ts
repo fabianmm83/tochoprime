@@ -30,6 +30,9 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
 
+
+
+
 // Función helper para convertir Firestore Timestamp a Date
 const parseFirestoreDate = (dateValue: any): Date | string => {
   if (!dateValue) return new Date();
@@ -52,6 +55,9 @@ const parseFirestoreDate = (dateValue: any): Date | string => {
   // Devolver tal cual (string o lo que sea)
   return dateValue;
 };
+
+
+
 
 
 // Servicio para Temporadas
@@ -184,6 +190,10 @@ export const seasonsService = {
     }
   },
 };
+
+
+
+
 
 // Servicio para Divisiones
 export const divisionsService = {
@@ -371,6 +381,9 @@ export const divisionsService = {
 
 };
 
+
+
+
 // Servicio para Categorías
 export const categoriesService = {
   // Obtener categorías por división
@@ -519,6 +532,9 @@ export const categoriesService = {
   },
 };
 
+
+
+
 // Servicio para Campos
 export const fieldsService = {
   // Obtener todos los campos
@@ -653,6 +669,9 @@ export const fieldsService = {
     }
   },
 };
+
+
+
 
 // Servicio para Equipos
 export const teamsService = {
@@ -878,6 +897,10 @@ export const teamsService = {
     }
   },
 };
+
+
+
+
 
 // Servicio para Jugadores
 export const playersService = {
@@ -1190,6 +1213,11 @@ export const playersService = {
   },
 };
 
+
+
+
+
+// Servicio para Partidos
 // Servicio para Partidos
 export const matchesService = {
   // Obtener partidos por temporada
@@ -1414,369 +1442,681 @@ export const matchesService = {
     }
   },
 
-  // Generar calendario de temporada
-  // Generar calendario de temporada CON FÓRMULA MIXTA (9 jornadas)
-async generateSeasonCalendar(
-  seasonId: string,
-  divisionId: string,
-  teams: Team[],
-  isDoubleRoundRobin: boolean = false // Cambiado a false por defecto
-): Promise<Match[]> {
-  try {
-    const user = auth.currentUser;
-    const createdMatches: Match[] = [];
-    const teamCount = teams.length;
-    
-    if (teamCount < 2) {
-      throw new Error('Se necesitan al menos 2 equipos para generar un calendario');
-    }
-    
-    // Obtener categoría de la división
-    const categories = await categoriesService.getCategoriesByDivision(divisionId);
-    if (categories.length === 0) {
-      throw new Error('No hay categorías en esta división');
-    }
-    
-    const categoryId = categories[0].id;
-    
-    // Obtener campos disponibles
-    const fields = await fieldsService.getFields();
-    if (fields.length === 0) {
-      throw new Error('No hay campos disponibles');
-    }
-    
-    // Obtener árbitros disponibles
-    const referees = await refereesService.getReferees(seasonId);
-    
-    // CONFIGURACIÓN DE TEMPORADA - 9 JORNADAS FIJAS
-    const TOTAL_JORNADAS = 9;
-    const PARTIDOS_POR_EQUIPO = 8;
-    
-    // 1. DETERMINAR FÓRMULA SEGÚN NÚMERO DE EQUIPOS
-    let partidosUnicosPorEquipo: number;
-    let repeticionesNecesarias: number;
-    let tieneBYE: boolean = false;
-    
-    switch (teamCount) {
-      case 9:
-        // Fórmula perfecta: 8 partidos + 1 BYE
-        partidosUnicosPorEquipo = 8; // Juega contra todos
-        repeticionesNecesarias = 0;
-        tieneBYE = true;
-        break;
-        
-      case 8:
-        // 7 partidos únicos + 1 repetición
-        partidosUnicosPorEquipo = 7; // Juega contra 7 rivales
-        repeticionesNecesarias = 1;  // Repite 1 rival
-        tieneBYE = false;
-        break;
-        
-      case 7:
-        // 6 partidos únicos + 2 repeticiones
-        partidosUnicosPorEquipo = 6;
-        repeticionesNecesarias = 2;
-        tieneBYE = false;
-        break;
-        
-      case 6:
-        // 5 partidos únicos + 3 repeticiones
-        partidosUnicosPorEquipo = 5;
-        repeticionesNecesarias = 3;
-        tieneBYE = false;
-        break;
-        
-      default:
-        // Para otros tamaños, usar fórmula proporcional
-        if (teamCount > 9) {
-          // Dividir en grupos o ajustar fórmula
-          throw new Error(`Para ${teamCount} equipos, se recomienda dividir en grupos de 8-9 equipos`);
-        } else {
-          // Para grupos pequeños (<6), usar jornadas dobles
-          partidosUnicosPorEquipo = teamCount - 1;
-          repeticionesNecesarias = PARTIDOS_POR_EQUIPO - partidosUnicosPorEquipo;
-          tieneBYE = false;
+  async generateSeasonCalendar(
+    seasonId: string,
+    divisionId: string,
+    teams: Team[],
+    startDate: Date = new Date(),
+    useAvailableFieldsOnly: boolean = true,
+    useGroups: boolean = false,
+    groupSize: number = 9,
+    generateByRound: boolean = false // NUEVO: Generar por jornada
+  ): Promise<Match[]> {
+    try {
+      const user = auth.currentUser;
+      const createdMatches: Match[] = [];
+      const teamCount = teams.length;
+      
+      if (teamCount < 2) {
+        throw new Error('Se necesitan al menos 2 equipos para generar un calendario');
+      }
+      
+      // Obtener categoría de la división
+      const categories = await categoriesService.getCategoriesByDivision(divisionId);
+      if (categories.length === 0) {
+        throw new Error('No hay categorías en esta división');
+      }
+      
+      const categoryId = categories[0].id;
+      
+      // Obtener campos disponibles
+      let fields = await fieldsService.getFields();
+      if (useAvailableFieldsOnly) {
+        fields = fields.filter(f => f.status === 'available');
+      }
+      
+      if (fields.length === 0) {
+        throw new Error('No hay campos disponibles');
+      }
+      
+      // Obtener árbitros disponibles
+      const referees = await refereesService.getReferees(seasonId);
+      
+      // CONFIGURACIÓN
+      const TOTAL_JORNADAS = 9;
+      const PARTIDOS_POR_EQUIPO = 8;
+      
+      // Horarios personalizados
+      const horarios = [
+        '07:00', '08:00', '09:00', '10:00', '11:00', 
+        '12:00', '13:00', '14:00', '15:00', '16:00'
+      ];
+      
+      // ====== NUEVA LÓGICA: POR JORNADA O COMPLETO ======
+      if (generateByRound) {
+        // Solo generar para la jornada específica (fecha proporcionada)
+        console.log(`📅 Generando calendario por jornada para fecha: ${startDate.toLocaleDateString()}`);
+        return await this.generateRoundCalendar(
+          seasonId,
+          divisionId,
+          teams,
+          startDate,
+          fields,
+          referees,
+          useGroups,
+          groupSize,
+          user
+        );
+      }
+      
+      // ====== LÓGICA ORIGINAL: CALENDARIO COMPLETO ======
+      let grupos: Team[][] = [];
+      
+      // Agrupar equipos por categoría SIEMPRE (esto es clave)
+      const teamsByCategory: Record<string, Team[]> = {};
+      teams.forEach(team => {
+        if (!teamsByCategory[team.categoryId]) {
+          teamsByCategory[team.categoryId] = [];
         }
-    }
-    
-    console.log(`Generando calendario para ${teamCount} equipos:`);
-    console.log(`- Partidos únicos por equipo: ${partidosUnicosPorEquipo}`);
-    console.log(`- Repeticiones necesarias: ${repeticionesNecesarias}`);
-    console.log(`- Tiene BYE: ${tieneBYE}`);
-    
-    // 2. GENERAR ROUND-ROBIN BÁSICO (partidos únicos)
-    const partidosUnicos: Array<{homeIdx: number, awayIdx: number, round: number}> = [];
-    const teamIndices = [...Array(teamCount).keys()];
-    
-    // Generar round-robin estándar
-    for (let round = 0; round < partidosUnicosPorEquipo; round++) {
-      for (let i = 0; i < teamCount / 2; i++) {
-        const homeIdx = teamIndices[i];
-        const awayIdx = teamIndices[teamCount - 1 - i];
-        
-        if (homeIdx !== undefined && awayIdx !== undefined && homeIdx !== awayIdx) {
-          partidosUnicos.push({
-            homeIdx,
-            awayIdx,
-            round: round + 1
-          });
+        teamsByCategory[team.categoryId].push(team);
+      });
+      
+      // Crear grupos dentro de cada categoría
+      Object.entries(teamsByCategory).forEach(([categoryId, categoryTeams]) => {
+        if (useGroups && categoryTeams.length > groupSize) {
+          // Dividir equipos de esta categoría en grupos
+          const shuffledTeams = [...categoryTeams].sort(() => Math.random() - 0.5);
+          
+          for (let i = 0; i < shuffledTeams.length; i += groupSize) {
+            const grupo = shuffledTeams.slice(i, i + groupSize);
+            grupos.push(grupo);
+            console.log(`🏆 Grupo en categoría ${categoryId}: ${grupo.length} equipos`);
+          }
+        } else {
+          // Sin grupos, usar todos los equipos de la categoría
+          grupos.push(categoryTeams);
+        }
+      });
+      
+      // Si no hay categorías definidas (fallback)
+      if (grupos.length === 0) {
+        if (useGroups && teamCount > groupSize) {
+          const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+          for (let i = 0; i < shuffledTeams.length; i += groupSize) {
+            const grupo = shuffledTeams.slice(i, i + groupSize);
+            grupos.push(grupo);
+          }
+        } else {
+          grupos = [teams];
         }
       }
       
-      // Rotación round-robin (algoritmo estándar)
-      const last = teamIndices.pop();
-      if (last !== undefined) {
-        teamIndices.splice(1, 0, last);
+      // ====== FÓRMULA CORREGIDA Y MEJORADA ======
+      const generarCalendarioParaGrupo = async (
+        grupo: Team[], 
+        grupoNumero: number,
+        fechaInicioGrupo: Date
+      ): Promise<Match[]> => {
+        const grupoMatches: Match[] = [];
+        const grupoTeamCount = grupo.length;
+        
+        if (grupoTeamCount < 2) {
+          console.log(`⚠️  Grupo ${grupoNumero} tiene menos de 2 equipos, se omite`);
+          return [];
+        }
+        
+        console.log(`\n📋 GENERANDO CALENDARIO PARA GRUPO ${grupoNumero} (${grupoTeamCount} equipos)`);
+        
+        // FÓRMULA MEJORADA - GARANTIZA 8 PARTIDOS POR EQUIPO
+        let partidosUnicosPorEquipo: number;
+        let repeticionesNecesarias: number;
+        let tieneBYE: boolean = false;
+        let rondasTotales: number = TOTAL_JORNADAS;
+        
+        // FÓRMULA ÓPTIMA PARA TODOS LOS TAMAÑOS (CORREGIDA PARA 7 EQUIPOS)
+        switch (grupoTeamCount) {
+          case 2:
+            // Para 2 equipos: 1 partido único + 7 repeticiones = 8 partidos
+            partidosUnicosPorEquipo = 1;
+            repeticionesNecesarias = 7;
+            tieneBYE = false;
+            break;
+          case 3:
+            // Para 3 equipos: 2 partidos únicos + 6 repeticiones
+            partidosUnicosPorEquipo = 2;
+            repeticionesNecesarias = 6;
+            tieneBYE = false;
+            break;
+          case 4:
+            // Para 4 equipos: 3 partidos únicos + 5 repeticiones
+            partidosUnicosPorEquipo = 3;
+            repeticionesNecesarias = 5;
+            tieneBYE = false;
+            break;
+          case 5:
+            // Para 5 equipos: 4 partidos únicos + 4 repeticiones
+            partidosUnicosPorEquipo = 4;
+            repeticionesNecesarias = 4;
+            tieneBYE = false;
+            break;
+          case 6:
+            // Para 6 equipos: 5 partidos únicos + 3 repeticiones
+            partidosUnicosPorEquipo = 5;
+            repeticionesNecesarias = 3;
+            tieneBYE = false;
+            break;
+          case 7:
+            // CORREGIDO: Para 7 equipos: 6 partidos únicos + 2 repeticiones = 8 partidos
+            partidosUnicosPorEquipo = 6;
+            repeticionesNecesarias = 2;
+            tieneBYE = false;
+            break;
+          case 8:
+            // Para 8 equipos: 7 partidos únicos + 1 repetición
+            partidosUnicosPorEquipo = 7;
+            repeticionesNecesarias = 1;
+            tieneBYE = false;
+            break;
+          case 9:
+            // Para 9 equipos: 8 partidos únicos + BYE
+            partidosUnicosPorEquipo = 8;
+            repeticionesNecesarias = 0;
+            tieneBYE = true;
+            break;
+          default:
+            // Para 10+ equipos: fórmula adaptativa
+            if (grupoTeamCount >= 10 && grupoTeamCount <= 16) {
+              // Para 10-16 equipos: 8 partidos por equipo
+              partidosUnicosPorEquipo = Math.min(8, grupoTeamCount - 1);
+              repeticionesNecesarias = PARTIDOS_POR_EQUIPO - partidosUnicosPorEquipo;
+              tieneBYE = false;
+            } else {
+              // Para más de 16 equipos: dividir en grupos o ajustar fórmula
+              partidosUnicosPorEquipo = Math.min(8, Math.floor(grupoTeamCount / 2));
+              repeticionesNecesarias = PARTIDOS_POR_EQUIPO - partidosUnicosPorEquipo;
+              tieneBYE = false;
+              console.log(`⚠️  Grupo grande (${grupoTeamCount} equipos), considerando división`);
+            }
+        }
+        
+        console.log(`📊 Fórmula para ${grupoTeamCount} equipos:`);
+        console.log(`   - Partidos únicos: ${partidosUnicosPorEquipo}`);
+        console.log(`   - Repeticiones: ${repeticionesNecesarias}`);
+        console.log(`   - BYE: ${tieneBYE ? 'Sí (solo para 9 equipos)' : 'No'}`);
+        console.log(`   - Total jornadas: ${rondasTotales}`);
+        
+        // 1. GENERAR ROUND-ROBIN MEJORADO
+        const partidosUnicos: Array<{homeIdx: number, awayIdx: number, round: number}> = [];
+        const teamIndices = [...Array(grupoTeamCount).keys()];
+        
+        // Generar partidos únicos distribuidos en las primeras jornadas
+        for (let round = 0; round < Math.min(partidosUnicosPorEquipo, rondasTotales); round++) {
+          // Algoritmo round-robin mejorado
+          for (let i = 0; i < Math.floor(grupoTeamCount / 2); i++) {
+            const homeIdx = teamIndices[i];
+            const awayIdx = teamIndices[grupoTeamCount - 1 - i];
+            
+            if (homeIdx !== undefined && awayIdx !== undefined && homeIdx !== awayIdx) {
+              partidosUnicos.push({
+                homeIdx,
+                awayIdx,
+                round: round + 1 // Jornadas del 1 al 9
+              });
+            }
+          }
+          
+          // Rotación round-robin
+          teamIndices.splice(1, 0, teamIndices.pop()!);
+        }
+        
+        // 2. GENERAR REPETICIONES DISTRIBUIDAS
+        const repeticiones: Array<{homeIdx: number, awayIdx: number, round: number}> = [];
+        
+        if (repeticionesNecesarias > 0) {
+          // Crear todas las combinaciones posibles
+          const todasCombinaciones: typeof partidosUnicos = [];
+          for (let i = 0; i < grupoTeamCount; i++) {
+            for (let j = i + 1; j < grupoTeamCount; j++) {
+              todasCombinaciones.push({
+                homeIdx: i,
+                awayIdx: j,
+                round: 1
+              });
+            }
+          }
+          
+          // Filtrar los que ya están en partidosUnicos
+          const partidosYaProgramados = new Set(
+            partidosUnicos.map(p => `${Math.min(p.homeIdx, p.awayIdx)}-${Math.max(p.homeIdx, p.awayIdx)}`)
+          );
+          
+          const partidosParaRepetir = todasCombinaciones.filter(p => {
+            const key = `${Math.min(p.homeIdx, p.awayIdx)}-${Math.max(p.homeIdx, p.awayIdx)}`;
+            return !partidosYaProgramados.has(key);
+          });
+          
+          // Si no hay suficientes partidos para repetir, repetir algunos ya existentes
+          const partidosDisponibles = [
+            ...partidosParaRepetir,
+            ...partidosUnicos.map(p => ({...p, round: 1}))
+          ];
+          
+          // Distribuir repeticiones en las jornadas restantes
+          let repeticionRound = Math.min(partidosUnicosPorEquipo, rondasTotales) + 1;
+          let repeticionesAsignadas = 0;
+          const repeticionesTotales = repeticionesNecesarias * Math.floor(grupoTeamCount / 2);
+          
+          while (repeticionesAsignadas < repeticionesTotales && repeticionRound <= rondasTotales) {
+            // Tomar partidos para esta ronda
+            const inicio = repeticionesAsignadas % partidosDisponibles.length;
+            const partidosEstaRonda = [];
+            
+            for (let i = 0; i < Math.floor(grupoTeamCount / 2) && partidosEstaRonda.length < repeticionesTotales - repeticionesAsignadas; i++) {
+              const partido = partidosDisponibles[(inicio + i) % partidosDisponibles.length];
+              partidosEstaRonda.push({
+                ...partido,
+                round: repeticionRound
+              });
+              repeticionesAsignadas++;
+            }
+            
+            repeticiones.push(...partidosEstaRonda);
+            repeticionRound++;
+          }
+        }
+        
+        // 3. COMBINAR Y ORGANIZAR
+        const todosLosPartidos = [...partidosUnicos, ...repeticiones];
+        const partidosPorJornada: Record<number, typeof todosLosPartidos> = {};
+        
+        todosLosPartidos.forEach(partido => {
+          if (!partidosPorJornada[partido.round]) {
+            partidosPorJornada[partido.round] = [];
+          }
+          partidosPorJornada[partido.round].push(partido);
+        });
+        
+        // 4. ASIGNAR FECHAS Y HORARIOS
+        const fechaBase = new Date(fechaInicioGrupo);
+        fechaBase.setHours(0, 0, 0, 0);
+        
+        // Asegurar que sea domingo
+        const diaSemanaBase = fechaBase.getDay();
+        if (diaSemanaBase !== 0) {
+          const ajuste = (0 - diaSemanaBase + 7) % 7;
+          fechaBase.setDate(fechaBase.getDate() + ajuste);
+        }
+        
+        // 5. CREAR PARTIDOS PARA EL GRUPO
+        for (let jornada = 1; jornada <= rondasTotales; jornada++) {
+          const partidosJornada = partidosPorJornada[jornada] || [];
+          
+          if (partidosJornada.length === 0) {
+            if (tieneBYE && grupoTeamCount === 9) {
+              console.log(`   Jornada ${jornada}: BYE para un equipo del grupo`);
+            }
+            continue;
+          }
+          
+          const fechaPartido = new Date(fechaBase);
+          fechaPartido.setDate(fechaBase.getDate() + ((jornada - 1) * 7));
+          
+          // Organizar partidos por horario
+          const horariosDisponibles = [...horarios];
+          let horarioIndex = 0;
+          
+          for (const [indexPartido, partido] of partidosJornada.entries()) {
+            const homeTeam = grupo[partido.homeIdx];
+            const awayTeam = grupo[partido.awayIdx];
+            
+            // Asignar horario rotativo
+            const horario = horariosDisponibles[horarioIndex % horariosDisponibles.length];
+            horarioIndex++;
+            
+            // Asignar campo (distribuir entre Cuemanco y Zague)
+            const camposCuemanco = fields.filter(f => f.name.includes('Cuemanco'));
+            const camposZague = fields.filter(f => f.name.includes('Zague'));
+            let field: any;
+            
+            if (camposCuemanco.length > 0 && camposZague.length > 0) {
+              // Alternar entre Cuemanco y Zague por horario
+              const useCuemanco = (horarioIndex % 2) === 0;
+              const camposElegidos = useCuemanco ? camposCuemanco : camposZague;
+              const fieldIndex = jornada % camposElegidos.length;
+              field = camposElegidos[fieldIndex];
+              console.log(`   Campo asignado: ${field.name} (${useCuemanco ? 'Cuemanco' : 'Zague'})`);
+            } else {
+              // Fallback: usar cualquier campo disponible
+              const fieldIndex = (grupoNumero + jornada + indexPartido) % fields.length;
+              field = fields[fieldIndex];
+            }
+            
+            // Asignar árbitro
+            let refereeId: string | undefined = undefined;
+            let refereeName: string | undefined = undefined;
+            
+            if (referees.length > 0) {
+              const refereeIndex = (jornada + indexPartido) % referees.length;
+              const referee = referees[refereeIndex];
+              refereeId = referee.id;
+              refereeName = referee.fullName || `${referee.firstName} ${referee.lastName}`;
+            }
+            
+            // Datos del partido
+            const matchData: Omit<Match, 'id' | 'createdAt' | 'updatedAt' | 'homeTeam' | 'awayTeam'> = {
+              seasonId,
+              divisionId,
+              categoryId: homeTeam.categoryId || categoryId,
+              fieldId: field.id,
+              homeTeamId: homeTeam.id,
+              awayTeamId: awayTeam.id,
+              matchDate: fechaPartido,
+              matchTime: horario,
+              round: jornada,
+              isPlayoff: false,
+              status: 'scheduled' as const,
+              ...(refereeId && { refereeId }),
+              ...(refereeName && { refereeName }),
+              notes: `Jornada ${jornada} - ${field.name} (${horario})`,
+              createdBy: user?.uid || 'system',
+              updatedBy: user?.uid || 'system',
+            };
+            
+            try {
+              const matchId = await this.createMatch(matchData);
+              const match = await this.getMatchById(matchId);
+              if (match) {
+                grupoMatches.push(match);
+              }
+            } catch (error) {
+              console.error(`     ❌ Error creando partido:`, error);
+            }
+          }
+        }
+        
+        // 6. VALIDACIÓN DEL GRUPO
+        const partidosPorEquipoGrupo: Record<string, number> = {};
+        grupo.forEach((team, idx) => {
+          const partidosCount = todosLosPartidos.filter(p => 
+            p.homeIdx === idx || p.awayIdx === idx
+          ).length;
+          partidosPorEquipoGrupo[team.name] = partidosCount;
+        });
+        
+        console.log(`✅ Grupo ${grupoNumero} completado:`);
+        console.log(`   - Partidos creados: ${grupoMatches.length}`);
+        console.log(`   - Partidos por equipo:`, partidosPorEquipoGrupo);
+        
+        // Verificar que todos tengan 8 partidos
+        const equiposConMenos = Object.entries(partidosPorEquipoGrupo)
+          .filter(([_, count]) => count < 8)
+          .map(([name]) => name);
+        
+        if (equiposConMenos.length > 0) {
+          console.warn(`   ⚠️  Equipos con menos de 8 partidos: ${equiposConMenos.join(', ')}`);
+        }
+        
+        return grupoMatches;
+      };
+      
+      // ====== EJECUTAR PARA CADA GRUPO ======
+      console.log(`\n🏁 INICIANDO GENERACIÓN DE CALENDARIO COMPLETO`);
+      console.log(`===============================================`);
+      console.log(`Total de equipos: ${teamCount}`);
+      console.log(`Número de grupos: ${grupos.length}`);
+      console.log(`Fecha de inicio: ${startDate.toLocaleDateString()}`);
+      console.log(`Usar grupos: ${useGroups ? 'Sí' : 'No'}`);
+      console.log(`Generar por jornada: ${generateByRound ? 'Sí (solo una fecha)' : 'No (9 jornadas)'}`);
+      
+      // NOTA: No escalonar fechas - cada grupo empieza el mismo día
+      // (esto es lo que solicitaste - independiente por grupo)
+      for (let i = 0; i < grupos.length; i++) {
+        const grupo = grupos[i];
+        const grupoMatches = await generarCalendarioParaGrupo(grupo, i + 1, startDate);
+        createdMatches.push(...grupoMatches);
+      }
+      
+      // ====== VALIDACIÓN FINAL ======
+      console.log(`\n📊 RESUMEN FINAL DEL CALENDARIO:`);
+      console.log(`✅ Total de partidos creados: ${createdMatches.length}`);
+      console.log(`✅ Total de grupos: ${grupos.length}`);
+      console.log(`✅ Total de jornadas: ${TOTAL_JORNADAS}`);
+      console.log(`✅ Fecha de inicio para todos: ${startDate.toLocaleDateString()}`);
+      
+      // Estadísticas por grupo
+      grupos.forEach((grupo, index) => {
+        const grupoTeams = grupo.length;
+        const totalPartidosGrupo = Math.floor(grupoTeams * PARTIDOS_POR_EQUIPO / 2);
+        
+        console.log(`\n📋 Grupo ${index + 1}:`);
+        console.log(`   - Equipos: ${grupoTeams}`);
+        console.log(`   - Partidos por equipo: ${PARTIDOS_POR_EQUIPO}`);
+        console.log(`   - Total partidos: ${totalPartidosGrupo}`);
+        console.log(`   - Categorías únicas: ${[...new Set(grupo.map(t => t.categoryId))].length}`);
+      });
+      
+      return createdMatches;
+      
+    } catch (error) {
+      console.error('❌ Error generando calendario:', error);
+      throw error;
+    }
+  },
+
+  // ====== NUEVA FUNCIÓN: GENERAR POR JORNADA ======
+  async generateRoundCalendar(
+    seasonId: string,
+    divisionId: string,
+    teams: Team[],
+    roundDate: Date,
+    fields: any[],
+    referees: any[],
+    useGroups: boolean,
+    groupSize: number,
+    user: any
+  ): Promise<Match[]> {
+    console.log(`🎯 Generando partidos para jornada específica`);
+    
+    const createdMatches: Match[] = [];
+    const horarios = ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+    
+    // Obtener categoría de la división para usar como fallback
+    const categories = await categoriesService.getCategoriesByDivision(divisionId);
+    const defaultCategoryId = categories.length > 0 ? categories[0].id : 'default';
+    
+    // Determinar número de jornada basado en fecha (1-9)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const roundDateCopy = new Date(roundDate);
+    roundDateCopy.setHours(0, 0, 0, 0);
+    
+    // Calcular diferencia en semanas desde hoy
+    const diffTime = roundDateCopy.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const roundNumber = Math.min(9, Math.max(1, Math.floor(diffDays / 7) + 1));
+    
+    console.log(`📅 Jornada calculada: ${roundNumber} para fecha ${roundDate.toLocaleDateString()}`);
+    console.log(`📅 Diferencia en días: ${diffDays}, semanas: ${Math.floor(diffDays / 7)}`);
+    
+    // Agrupar equipos por categoría
+    const teamsByCategory: Record<string, Team[]> = {};
+    teams.forEach(team => {
+      const catId = team.categoryId || defaultCategoryId;
+      if (!teamsByCategory[catId]) {
+        teamsByCategory[catId] = [];
+      }
+      teamsByCategory[catId].push(team);
+    });
+    
+    console.log(`📊 Equipos agrupados por ${Object.keys(teamsByCategory).length} categorías`);
+    
+    // Generar partidos para cada categoría/grupo
+    for (const [catId, categoryTeams] of Object.entries(teamsByCategory)) {
+      let gruposEnCategoria: Team[][] = [];
+      
+      if (useGroups && categoryTeams.length > groupSize) {
+        // Dividir en grupos
+        for (let i = 0; i < categoryTeams.length; i += groupSize) {
+          gruposEnCategoria.push(categoryTeams.slice(i, i + groupSize));
+        }
+        console.log(`   Categoría ${catId}: ${categoryTeams.length} equipos → ${gruposEnCategoria.length} grupos`);
+      } else {
+        gruposEnCategoria = [categoryTeams];
+        console.log(`   Categoría ${catId}: ${categoryTeams.length} equipos (un solo grupo)`);
+      }
+      
+      // Para cada grupo en esta categoría
+      for (let grupoIndex = 0; grupoIndex < gruposEnCategoria.length; grupoIndex++) {
+        const grupo = gruposEnCategoria[grupoIndex];
+        if (grupo.length < 2) {
+          console.log(`   ⚠️  Grupo ${grupoIndex + 1} tiene menos de 2 equipos, se omite`);
+          continue;
+        }
+        
+        console.log(`   🏆 Grupo ${grupoIndex + 1}: ${grupo.length} equipos`);
+        
+        // Generar emparejamientos para esta jornada
+        const partidosJornada = this.generatePairingsForRound(grupo, roundNumber);
+        
+        console.log(`   🤝 ${partidosJornada.length} partidos generados para este grupo`);
+        
+        // Asignar horarios y campos
+        let horarioIndex = 0;
+        const camposCuemanco = fields.filter(f => f.name.includes('Cuemanco'));
+        const camposZague = fields.filter(f => f.name.includes('Zague'));
+        
+        console.log(`   ⚽ Campos disponibles: ${fields.length} total, ${camposCuemanco.length} Cuemanco, ${camposZague.length} Zague`);
+        
+        for (const partido of partidosJornada) {
+          if (horarioIndex >= horarios.length) {
+            console.warn('   ⚠️  No hay más horarios disponibles para esta jornada');
+            break;
+          }
+          
+          const horario = horarios[horarioIndex];
+          horarioIndex++;
+          
+          // Alternar entre Cuemanco y Zague
+          let field: any;
+          if (camposCuemanco.length > 0 && camposZague.length > 0) {
+            const useCuemanco = (horarioIndex % 2) === 0;
+            const camposElegidos = useCuemanco ? camposCuemanco : camposZague;
+            const fieldIdx = (roundNumber + grupoIndex) % camposElegidos.length;
+            field = camposElegidos[fieldIdx];
+            console.log(`   🏟️  Campo asignado: ${field.name} (${useCuemanco ? 'Cuemanco' : 'Zague'}) - ${horario}`);
+          } else {
+            const fieldIdx = (roundNumber + grupoIndex + horarioIndex) % fields.length;
+            field = fields[fieldIdx];
+            console.log(`   🏟️  Campo asignado: ${field.name} - ${horario}`);
+          }
+          
+          // Árbitro
+          let refereeId: string | undefined = undefined;
+          let refereeName: string | undefined = undefined;
+          if (referees.length > 0) {
+            const refereeIdx = (roundNumber + horarioIndex) % referees.length;
+            const referee = referees[refereeIdx];
+            refereeId = referee.id;
+            refereeName = referee.fullName || `${referee.firstName} ${referee.lastName}`;
+            console.log(`   👨‍⚖️  Árbitro asignado: ${refereeName}`);
+          }
+          
+          // Crear partido
+          const matchData: Omit<Match, 'id' | 'createdAt' | 'updatedAt' | 'homeTeam' | 'awayTeam'> = {
+            seasonId,
+            divisionId,
+            categoryId: catId,
+            fieldId: field.id,
+            homeTeamId: partido.homeTeam.id,
+            awayTeamId: partido.awayTeam.id,
+            matchDate: roundDate,
+            matchTime: horario,
+            round: roundNumber,
+            isPlayoff: false,
+            status: 'scheduled' as const,
+            ...(refereeId && { refereeId }),
+            ...(refereeName && { refereeName }),
+            notes: `Jornada ${roundNumber} - ${field.name} (${horario})`,
+            createdBy: user?.uid || 'system',
+            updatedBy: user?.uid || 'system',
+          };
+          
+          try {
+            const matchId = await this.createMatch(matchData);
+            const match = await this.getMatchById(matchId);
+            if (match) {
+              createdMatches.push(match);
+            }
+          } catch (error) {
+            console.error('   ❌ Error creando partido:', error);
+          }
+        }
       }
     }
     
-    // 3. SELECCIONAR RIVALES A REPETIR (si es necesario)
-    const repeticiones: Array<{homeIdx: number, awayIdx: number, round: number}> = [];
+    console.log(`\n✅ Jornada ${roundNumber} generada exitosamente:`);
+    console.log(`   - Total partidos creados: ${createdMatches.length}`);
+    console.log(`   - Fecha: ${roundDate.toLocaleDateString()}`);
+    console.log(`   - Categorías procesadas: ${Object.keys(teamsByCategory).length}`);
     
-    if (repeticionesNecesarias > 0) {
-      // Estrategia simple: repetir primeros rivales del round-robin
-      for (let r = 0; r < repeticionesNecesarias; r++) {
-        const roundBase = partidosUnicosPorEquipo + r;
+    return createdMatches;
+  },
+
+  // ====== FUNCIÓN AUXILIAR: GENERAR EMPAREJAMIENTOS POR JORNADA ======
+  generatePairingsForRound(teams: Team[], roundNumber: number): Array<{homeTeam: Team, awayTeam: Team}> {
+    const pairings: Array<{homeTeam: Team, awayTeam: Team}> = [];
+    
+    if (teams.length < 2) return pairings;
+    
+    // Crear una copia de los equipos
+    const teamsCopy = [...teams];
+    
+    // Si número impar, el último equipo tiene descanso (BYE)
+    if (teamsCopy.length % 2 !== 0) {
+      const byeTeam = teamsCopy[teamsCopy.length - 1];
+      console.log(`   ⏸️  ${byeTeam.name} tiene BYE esta jornada`);
+      teamsCopy.pop(); // Remover el equipo que tendrá BYE
+    }
+    
+    // Algoritmo round-robin simple para emparejar
+    const n = teamsCopy.length;
+    
+    for (let i = 0; i < n / 2; i++) {
+      // Calcular índices usando algoritmo round-robin
+      const homeIdx = i;
+      const awayIdx = (n - 1 - i + roundNumber - 1) % (n - 1);
+      
+      if (homeIdx !== awayIdx && 
+          teamsCopy[homeIdx] && teamsCopy[awayIdx] && 
+          teamsCopy[homeIdx].id && teamsCopy[awayIdx].id) {
         
-        // Tomar partidos de las primeras rondas para repetir
-        const partidosARepetir = partidosUnicos
-          .filter(p => p.round === (r % partidosUnicosPorEquipo) + 1)
-          .slice(0, Math.ceil(teamCount / 2));
+        // Alternar localía basado en jornada
+        const isHome = (roundNumber + i) % 2 === 0;
         
-        partidosARepetir.forEach(partido => {
-          repeticiones.push({
-            homeIdx: partido.awayIdx, // Intercambiar localía
-            awayIdx: partido.homeIdx,
-            round: roundBase + 1
-          });
+        pairings.push({
+          homeTeam: isHome ? teamsCopy[homeIdx] : teamsCopy[awayIdx],
+          awayTeam: isHome ? teamsCopy[awayIdx] : teamsCopy[homeIdx]
         });
       }
     }
     
-    // 4. ASIGNAR BYE A GRUPOS DE 9
-    const equiposConBYE: number[] = [];
-    if (tieneBYE && teamCount === 9) {
-      // Cada equipo tiene 1 BYE en diferente jornada
-      for (let equipoIdx = 0; equipoIdx < teamCount; equipoIdx++) {
-        equiposConBYE.push(equipoIdx);
+    // Si hay un número impar original, asegurarse de que todos jueguen
+    if (teams.length % 2 !== 0 && pairings.length < Math.floor(teams.length / 2)) {
+      // Añadir un partido extra si es necesario
+      const remainingTeams = teamsCopy.filter(team => 
+        !pairings.some(p => p.homeTeam.id === team.id || p.awayTeam.id === team.id)
+      );
+      
+      if (remainingTeams.length >= 2) {
+        pairings.push({
+          homeTeam: remainingTeams[0],
+          awayTeam: remainingTeams[1]
+        });
       }
     }
     
-    // 5. COMBINAR TODOS LOS PARTIDOS Y ASIGNAR FECHAS/HORARIOS
-    const todosLosPartidos = [...partidosUnicos, ...repeticiones];
-    
-    // Agrupar por jornada
-    const partidosPorJornada: Record<number, typeof todosLosPartidos> = {};
-    
-    todosLosPartidos.forEach(partido => {
-      if (!partidosPorJornada[partido.round]) {
-        partidosPorJornada[partido.round] = [];
-      }
-      partidosPorJornada[partido.round].push(partido);
-    });
-    
-    // 6. ASIGNAR FECHAS Y HORARIOS REALES
-    // Fechas base (ejemplo: empezar en 2 semanas)
-    const fechaBase = new Date();
-    fechaBase.setDate(fechaBase.getDate() + 14); // 2 semanas después
-    fechaBase.setHours(0, 0, 0, 0);
-    
-    // Horarios disponibles (sábados y domingos)
-    const horarios = ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00'];
-    
-    // 7. CREAR PARTIDOS EN FIRESTORE
-    for (let jornada = 1; jornada <= TOTAL_JORNADAS; jornada++) {
-      const partidosJornada = partidosPorJornada[jornada] || [];
-      const fechaPartido = new Date(fechaBase);
-      fechaPartido.setDate(fechaBase.getDate() + ((jornada - 1) * 7)); // Una semana por jornada
-      
-      // Asegurar que sea fin de semana (sábado)
-      const diaSemana = fechaPartido.getDay();
-      if (diaSemana !== 6) { // 6 = sábado
-        const ajuste = (6 - diaSemana + 7) % 7;
-        fechaPartido.setDate(fechaPartido.getDate() + ajuste);
-      }
-      
-      // Asignar horarios a los partidos de esta jornada
-      for (const [indexPartido, partido] of partidosJornada.entries()) {
-        const homeTeam = teams[partido.homeIdx];
-        const awayTeam = teams[partido.awayIdx];
-        
-        // Asignar campo rotando
-        const fieldIndex = (jornada + indexPartido) % fields.length;
-        const field = fields[fieldIndex];
-        
-        // Asignar horario
-        const horarioIndex = indexPartido % horarios.length;
-        const matchTime = horarios[horarioIndex];
-        
-        // Asignar árbitro si hay disponibles
-        let refereeId: string | undefined = undefined;
-        let refereeName: string | undefined = undefined;
-        
-        if (referees.length > 0) {
-          const refereeIndex = (jornada + indexPartido) % referees.length;
-          const referee = referees[refereeIndex];
-          refereeId = referee.id;
-          refereeName = referee.fullName; // Usa fullName según tu interfaz
-        }
-        
-        // Datos del partido - Tipo correcto
-        const matchData: Omit<Match, 'id' | 'createdAt' | 'updatedAt' | 'homeTeam' | 'awayTeam'> = {
-          // IDs de referencia
-          seasonId,
-          divisionId,
-          categoryId,
-          fieldId: field.id,
-          
-          // Equipos (solo IDs)
-          homeTeamId: homeTeam.id,
-          awayTeamId: awayTeam.id,
-          
-          // Fecha y hora
-          matchDate: fechaPartido,
-          matchTime,
-          
-          // Información de ronda
-          round: jornada,
-          isPlayoff: false,
-          status: 'scheduled' as const,
-          
-          // Árbitro (opcional)
-          ...(refereeId && { refereeId }),
-          ...(refereeName && { refereeName }),
-          
-          // Notas
-          notes: `Jornada ${jornada} - ${field.name}`,
-          
-          // Campos de sistema (requeridos)
-          createdBy: user?.uid || 'system',
-          updatedBy: user?.uid || 'system',
-          
-          // Campos opcionales (se pueden omitir)
-          // Estos campos son opcionales en tu interfaz Match:
-          // homeScore, awayScore, winner, resultDetails, videoUrl,
-          // spectators, weather, statsSubmitted, statsSubmittedBy,
-          // statsSubmittedAt, playoffStage
-        };
-        
-        try {
-          // Crear partido de forma síncrona en este bucle
-          const matchId = await this.createMatch(matchData);
-          const match = await this.getMatchById(matchId);
-          if (match) createdMatches.push(match);
-        } catch (error) {
-          console.error(`Error creando partido ${homeTeam.name} vs ${awayTeam.name}:`, error);
-        }
-      }
-    }
-    
-    // 8. REGISTRAR BYE SI APLICA
-    if (tieneBYE && teamCount === 9) {
-      console.log(`Nota: Grupo de 9 equipos - Cada equipo tendrá 1 jornada de descanso (BYE)`);
-      
-      // Registrar BYEs en el sistema (opcional)
-      for (let equipoIdx = 0; equipoIdx < teamCount; equipoIdx++) {
-        const equipo = teams[equipoIdx];
-        const jornadaBYE = (equipoIdx % 9) + 1;
-        
-        console.log(`${equipo.name}: BYE en Jornada ${jornadaBYE}`);
-        
-        // Podrías crear un registro especial o evento de calendario
-        try {
-          const byeEventData = {
-            type: 'bye' as const,
-            title: `Descanso - ${equipo.name}`,
-            description: `Jornada ${jornadaBYE}: ${equipo.name} tiene día libre`,
-            startDate: new Date(fechaBase.getTime() + ((jornadaBYE - 1) * 7 * 24 * 60 * 60 * 1000)),
-            endDate: new Date(fechaBase.getTime() + ((jornadaBYE - 1) * 7 * 24 * 60 * 60 * 1000) + (2 * 60 * 60 * 1000)),
-            allDay: false,
-            teamId: equipo.id,
-            color: '#6B7280',
-            textColor: '#FFFFFF',
-            notifyParticipants: false,
-            createdBy: user?.uid || 'system'
-          };
-          
-          // Si tienes un servicio de eventos, podrías crearlo
-          // await calendarService.createCalendarEvent(byeEventData);
-        } catch (error) {
-          console.error(`Error registrando BYE para ${equipo.name}:`, error);
-        }
-      }
-    }
-    
-    // 9. VALIDAR QUE TODOS LOS EQUIPOS TENGAN PARTIDOS CORRECTOS
-    const partidosPorEquipo: Record<string, number> = {};
-    const equiposConPartidosIncorrectos: string[] = [];
-    
-    teams.forEach((team, idx) => {
-      const partidosCount = todosLosPartidos.filter(p => 
-        p.homeIdx === idx || p.awayIdx === idx
-      ).length;
-      
-      partidosPorEquipo[team.name] = partidosCount;
-      
-      // Validación: Para grupos sin BYE, deben tener 8 partidos
-      if (!tieneBYE && partidosCount !== PARTIDOS_POR_EQUIPO) {
-        equiposConPartidosIncorrectos.push(`${team.name} (${partidosCount} partidos)`);
-      }
-      
-      // Para grupos con BYE (9 equipos), deben tener 8 partidos
-      if (tieneBYE && partidosCount !== 8) {
-        equiposConPartidosIncorrectos.push(`${team.name} (${partidosCount} partidos, debería tener 8)`);
-      }
-    });
-    
-    // Mostrar resumen
-    console.log('=== RESUMEN DEL CALENDARIO GENERADO ===');
-    console.log(`Total de equipos: ${teamCount}`);
-    console.log(`Total de partidos creados: ${createdMatches.length}`);
-    console.log(`Total de jornadas: ${TOTAL_JORNADAS}`);
-    console.log('Partidos por equipo:', partidosPorEquipo);
-    
-    if (equiposConPartidosIncorrectos.length > 0) {
-      console.warn('⚠️ Equipos con número de partidos incorrecto:', equiposConPartidosIncorrectos);
-    } else {
-      console.log('✅ Todos los equipos tienen el número correcto de partidos');
-    }
-    
-    // Mostrar distribución por jornada
-    console.log('Distribución por jornada:');
-    for (let jornada = 1; jornada <= TOTAL_JORNADAS; jornada++) {
-      const partidosEnJornada = partidosPorJornada[jornada]?.length || 0;
-      console.log(`  Jornada ${jornada}: ${partidosEnJornada} partidos`);
-    }
-    
-    // 10. CONVERTIR PARTIDOS A EVENTOS DE CALENDARIO (opcional)
-    try {
-      if (createdMatches.length > 0) {
-        // Si tienes un servicio de calendario, puedes convertir los partidos
-        // await calendarService.convertMatchesToCalendarEvents(createdMatches);
-        console.log(`✅ ${createdMatches.length} partidos creados exitosamente`);
-      }
-    } catch (error) {
-      console.error('Error convirtiendo partidos a eventos de calendario:', error);
-    }
-    
-    return createdMatches;
-    
-  } catch (error) {
-    console.error('Error generating season calendar:', error);
-    throw error;
-  }
-},
-
-
-
-
-
-
-
-
-
-
-
+    return pairings;
+  },
 
   // Obtener próximos partidos
   async getUpcomingMatches(limit: number = 10): Promise<Match[]> {
@@ -1810,6 +2150,11 @@ async generateSeasonCalendar(
     }
   },
 };
+
+
+
+
+
 
 // Servicio para Árbitros
 export const refereesService = {

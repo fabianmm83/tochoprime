@@ -39,6 +39,17 @@ const Matches: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Estado para fecha de inicio del calendario
+  const [startDate, setStartDate] = useState<Date>(() => {
+    // Por defecto, próximo domingo
+    const nextSunday = new Date();
+    const dayOfWeek = nextSunday.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+    const daysUntilSunday = (0 - dayOfWeek + 7) % 7 || 7;
+    nextSunday.setDate(nextSunday.getDate() + daysUntilSunday);
+    nextSunday.setHours(0, 0, 0, 0);
+    return nextSunday;
+  });
+  
   // Cargar datos iniciales
   useEffect(() => {
     loadData();
@@ -209,7 +220,7 @@ const Matches: React.FC = () => {
       }, {} as Record<number, Match[]>);
   }, [filteredMatches]);
   
-  // Manejar generación de calendario
+  // Manejar generación de calendario CON FECHA PERSONALIZABLE
   const handleGenerateCalendar = async () => {
     if (!selectedSeason || !selectedDivision || teams.length < 2) {
       setNotification({
@@ -221,24 +232,53 @@ const Matches: React.FC = () => {
     
     try {
       setLoading(true);
-      await matchesService.generateSeasonCalendar(selectedSeason, selectedDivision, teams);
+      
+      // Usar la función mejorada con fecha personalizable
+      await matchesService.generateSeasonCalendar(
+        selectedSeason,
+        selectedDivision,
+        teams,
+        startDate,  // Fecha de inicio personalizada
+        true        // Usar solo campos disponibles
+      );
       
       setNotification({
         type: 'success',
-        message: 'Calendario generado exitosamente'
+        message: `Calendario generado exitosamente para ${teams.length} equipos (siempre domingos)`
       });
       
       // Recargar partidos
       loadMatchesByDivision(selectedDivision);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating calendar:', error);
       setNotification({
         type: 'error',
-        message: 'Error al generar el calendario'
+        message: error.message || 'Error al generar el calendario'
       });
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Función para ajustar al próximo domingo
+  const setToNextSunday = () => {
+    const nextSunday = new Date();
+    const dayOfWeek = nextSunday.getDay();
+    const daysUntilSunday = (0 - dayOfWeek + 7) % 7 || 7;
+    nextSunday.setDate(nextSunday.getDate() + daysUntilSunday);
+    nextSunday.setHours(0, 0, 0, 0);
+    setStartDate(nextSunday);
+  };
+  
+  // Manejar cambio de fecha (ajustar automáticamente a domingo)
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedDate = new Date(e.target.value);
+    // Ajustar automáticamente al domingo más cercano
+    const dayOfWeek = selectedDate.getDay();
+    const daysUntilSunday = (0 - dayOfWeek + 7) % 7;
+    selectedDate.setDate(selectedDate.getDate() + daysUntilSunday);
+    selectedDate.setHours(0, 0, 0, 0);
+    setStartDate(selectedDate);
   };
   
   // Manejar eliminación de partido
@@ -293,10 +333,15 @@ const Matches: React.FC = () => {
     try {
       const dateObj = date instanceof Date ? date : new Date(date);
       if (isNaN(dateObj.getTime())) return 'Fecha inválida';
-      return format(dateObj, "dd 'de' MMMM 'de' yyyy", { locale: es });
+      return format(dateObj, "EEEE dd 'de' MMMM 'de' yyyy", { locale: es });
     } catch {
       return 'Fecha inválida';
     }
+  };
+  
+  // Formatear fecha corta para input
+  const formatDateForInput = (date: Date) => {
+    return format(date, 'yyyy-MM-dd');
   };
   
   if (loading) return <LoadingSpinner />;
@@ -310,7 +355,7 @@ const Matches: React.FC = () => {
             <p className="text-gray-600">Gestión de partidos y calendario de la liga</p>
           </div>
           
-          {/* BOTÓN DE REGRESO AL DASHBOARD - AÑADIDO AQUÍ */}
+          {/* BOTÓN DE REGRESO AL DASHBOARD */}
           <button
             onClick={() => navigate('/dashboard')}
             className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 flex items-center space-x-2"
@@ -408,45 +453,119 @@ const Matches: React.FC = () => {
           </div>
         </div>
         
+        {/* Selector de fecha de inicio para calendario */}
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-blue-800 mb-1">
+                Fecha de inicio del calendario (Siempre Domingo)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="date"
+                  value={formatDateForInput(startDate)}
+                  onChange={handleStartDateChange}
+                  className="flex-1 px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                />
+                <button
+                  onClick={setToNextSunday}
+                  className="px-3 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                >
+                  Próximo Domingo
+                </button>
+              </div>
+              <p className="text-xs text-blue-600 mt-2">
+                El calendario se generará para 9 domingos consecutivos empezando el: <span className="font-semibold">{formatDate(startDate)}</span>
+              </p>
+            </div>
+            
+            <div className="text-right">
+              <p className="text-sm font-medium text-gray-700 mb-1">Resumen</p>
+              <div className="text-xs text-gray-600">
+                <p>• Horarios: 7:00 AM - 4:00 PM</p>
+                <p>• Jornadas: 9 domingos consecutivos</p>
+                <p>• Partidos por equipo: 8</p>
+                <p>• Equipos disponibles: {teams.length}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         {/* Botones de acción */}
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => navigate('/partidos/nuevo')}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Nuevo Partido
-          </button>
-          
-          <button
-            onClick={() => navigate('/partidos/generar-calendario')}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-          >
-            Generar Calendario
+            Nuevo Partido (editar)
           </button>
           
           <button
             onClick={handleGenerateCalendar}
             disabled={!selectedDivision || teams.length < 2}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Generar Automático {teams.length > 0 && `(${teams.length} equipos)`}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Calendario Automático (TEMPORADA) {teams.length > 0 && `(${teams.length} equipos)`}
           </button>
           
           <button
             onClick={() => navigate('/calendario')}
-            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 flex items-center gap-2"
           >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
             Ver Calendario
           </button>
           
           <button
             onClick={() => navigate('/arbitros')}
-            className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+            className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 flex items-center gap-2"
           >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
             Gestionar Árbitros
+          </button>
+          
+          <button
+            onClick={() => navigate('/partidos/generar-calendario')}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Generar calendario manual
           </button>
         </div>
       </div>
+      
+      {/* Información de la temporada seleccionada */}
+      {selectedDivision && (
+        <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+          <div className="flex flex-col md:flex-row md:items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-blue-800">
+                {seasons.find(s => s.id === selectedSeason)?.name || 'Temporada'} - {divisions.find(d => d.id === selectedDivision)?.name || 'División'}
+              </h3>
+              <p className="text-sm text-blue-600">
+                {teams.length} equipos disponibles • {matches.length} partidos programados
+              </p>
+            </div>
+            <div className="mt-2 md:mt-0">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Siempre en Domingo
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Lista de partidos por ronda */}
       {Object.entries(matchesByRound).length > 0 ? (
@@ -573,32 +692,45 @@ const Matches: React.FC = () => {
                         <div className="flex justify-between">
                           <Link
                             to={`/partidos/${match.id}`}
-                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center gap-1"
                           >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
                             Ver Detalles
                           </Link>
                           
                           <div className="flex space-x-2">
                             <button
                               onClick={() => navigate(`/partidos/${match.id}/editar`)}
-                              className="text-yellow-600 hover:text-yellow-800 text-sm"
+                              className="text-yellow-600 hover:text-yellow-800 text-sm flex items-center gap-1"
                             >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
                               Editar
                             </button>
                             
                             {match.status === 'scheduled' && (
                               <button
                                 onClick={() => navigate(`/partidos/${match.id}/resultado`)}
-                                className="text-green-600 hover:text-green-800 text-sm"
+                                className="text-green-600 hover:text-green-800 text-sm flex items-center gap-1"
                               >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
                                 Registrar Resultado
                               </button>
                             )}
                             
                             <button
                               onClick={() => handleDeleteMatch(match.id)}
-                              className="text-red-600 hover:text-red-800 text-sm"
+                              className="text-red-600 hover:text-red-800 text-sm flex items-center gap-1"
                             >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
                               Eliminar
                             </button>
                           </div>
@@ -621,26 +753,45 @@ const Matches: React.FC = () => {
           <h3 className="text-xl font-medium text-gray-900 mb-2">No hay partidos programados</h3>
           <p className="text-gray-600 mb-6">
             {selectedDivision 
-              ? 'Comienza generando el calendario o creando partidos manualmente.'
+              ? 'Comienza generando el calendario automático o creando partidos manualmente.'
               : 'Selecciona una temporada y división para ver los partidos.'
             }
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <button
               onClick={() => navigate('/partidos/nuevo')}
-              className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
             >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
               Crear Partido Manual
             </button>
             {selectedDivision && teams.length >= 2 && (
               <button
                 onClick={handleGenerateCalendar}
-                className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                className="px-6 py-3 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 flex items-center gap-2"
               >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
                 Generar Calendario Automático
               </button>
             )}
           </div>
+          
+          {selectedDivision && teams.length >= 2 && (
+            <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-medium text-blue-800 mb-2">Configuración del calendario automático</h4>
+              <div className="text-sm text-blue-600 space-y-1">
+                <p>• Fecha de inicio: {formatDate(startDate)}</p>
+                <p>• Horarios: Domingos de 7:00 AM a 4:00 PM</p>
+                <p>• Duración: 9 jornadas consecutivas</p>
+                <p>• Partidos por equipo: 8</p>
+                <p>• Campos: Distribuidos entre Cuemanco y Zague</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

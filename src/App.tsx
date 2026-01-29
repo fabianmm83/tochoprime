@@ -21,6 +21,13 @@ import AdminDashboard from './pages/AdminDashboard';
 
 import LandingPage from './pages/LandingPage';
 
+// Componentes de landing para páginas públicas
+import PublicTeamsView from './components/landing/PublicTeamsView';
+import PublicStandings from './components/landing/PublicStandings';
+import UpcomingMatches from './components/landing/UpcomingMatches';
+import LocationsSection from './components/landing/LocationsSection';
+// Navbar y componentes comunes
+import Navbar from './components/common/Navbar'; // Este es tu Navbar público
 
 // Páginas del sistema existentes
 import Seasons from './pages/Seasons';
@@ -66,6 +73,48 @@ const RoleBasedRedirect: React.FC = () => {
   }
 };
 
+// Componente Layout para páginas públicas
+const PublicPageLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <Navbar />
+    <main className="pt-16"> {/* Padding para el navbar fijo */}
+      {children}
+    </main>
+    {/* Footer si lo quieres */}
+  </div>
+);
+
+// Páginas públicas usando el layout
+const PublicTeamsPage: React.FC = () => (
+  <PublicPageLayout>
+    <PublicTeamsView />
+  </PublicPageLayout>
+);
+
+const PublicMatchesPage: React.FC = () => (
+  <PublicPageLayout>
+    <UpcomingMatches />
+  </PublicPageLayout>
+);
+
+const PublicStandingsPage: React.FC = () => (
+  <PublicPageLayout>
+    <PublicStandings />
+  </PublicPageLayout>
+);
+
+const PublicCalendarPage: React.FC = () => (
+  <PublicPageLayout>
+    <UpcomingMatches /> {/* Reutilizamos UpcomingMatches para calendario */}
+  </PublicPageLayout>
+);
+
+const PublicLocationsPage: React.FC = () => (
+  <PublicPageLayout>
+    <LocationsSection />
+  </PublicPageLayout>
+);
+
 function App() {
   return (
     <Router>
@@ -75,6 +124,13 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          
+          {/* ==================== RUTAS PÚBLICAS DE VISUALIZACIÓN ==================== */}
+          <Route path="/equipos-public" element={<PublicTeamsPage />} />
+          <Route path="/partidos-public" element={<PublicMatchesPage />} />
+          <Route path="/tabla-posiciones-public" element={<PublicStandingsPage />} />
+          <Route path="/calendario-public" element={<PublicCalendarPage />} />
+          <Route path="/sedes" element={<PublicLocationsPage />} />
           
           {/* ==================== RUTAS PRINCIPALES POR ROL ==================== */}
           
@@ -258,20 +314,20 @@ function App() {
           } />
           
           <Route path="/tabla-posiciones" element={
-  <PrivateRoute>
-    <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro', 'espectador']}>
-      <StandingsTable />
-    </RoleBasedRoute>
-  </PrivateRoute>
-} />
-
-<Route path="/marcador-en-vivo" element={
-  <PrivateRoute>
-    <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
-      <LiveScore />
-    </RoleBasedRoute>
-  </PrivateRoute>
-} />
+            <PrivateRoute>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'capitan', 'jugador', 'arbitro', 'espectador']}>
+                <StandingsTable />
+              </RoleBasedRoute>
+            </PrivateRoute>
+          } />
+          
+          <Route path="/marcador-en-vivo" element={
+            <PrivateRoute>
+              <RoleBasedRoute allowedRoles={['superadministrador', 'admin', 'arbitro']}>
+                <LiveScore />
+              </RoleBasedRoute>
+            </PrivateRoute>
+          } />
           
           {/* Árbitros */}
           <Route path="/arbitros" element={

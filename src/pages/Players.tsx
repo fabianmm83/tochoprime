@@ -108,7 +108,7 @@ const Players: React.FC = () => {
       
       // Campos opcionales con valores por defecto
       dateOfBirth: newPlayer.dateOfBirth ? new Date(newPlayer.dateOfBirth).toISOString() : null,
-      emergencyContact: newPlayer.emergencyContact.name ? newPlayer.emergencyContact : undefined,
+      emergencyContact: newPlayer.emergencyContact.name ? newPlayer.emergencyContact : null,
       
       // Otros campos opcionales de tu interfaz
       identification: undefined,

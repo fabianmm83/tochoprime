@@ -2,10 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
-  Share2, 
-  MapPin, 
-  Trophy,
-  User,
   Home,
   Wifi,
   Coffee,
@@ -16,7 +12,8 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Maximize2
+  Maximize2,
+  MapPin
 } from 'lucide-react';
 import { fieldService } from '../services/firestore';
 import { Field } from '../types';
@@ -29,7 +26,7 @@ interface NotificationType {
   message: string;
 }
 
-// Datos predeterminados de los campos en Cuemanco Isla 5 - CORREGIDO para usar tipos válidos
+// Datos predeterminados de los campos en Cuemanco Isla 5
 const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { 
     code: 'Campo 1', 
@@ -49,7 +46,7 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     capacity: 14, 
     facilities: ['iluminación', 'vestuarios'], 
     location: { address: 'Isla 5 - Zona Central', city: 'Ciudad Deportiva' }, 
-    status: 'reserved',
+    status: 'available',
     priority: 1, 
     isActive: true 
   },
@@ -82,7 +79,7 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     capacity: 14, 
     facilities: ['iluminación'], 
     location: { address: 'Isla 5 - Zona Superior', city: 'Ciudad Deportiva' }, 
-    status: 'maintenance', 
+    status: 'available', 
     priority: 2, 
     isActive: true 
   },
@@ -104,7 +101,7 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     capacity: 14, 
     facilities: ['iluminación', 'estacionamiento'], 
     location: { address: 'Isla 5 - Entrada', city: 'Ciudad Deportiva' }, 
-    status: 'reserved',
+    status: 'available',
     priority: 3, 
     isActive: true 
   },
@@ -137,7 +134,7 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     capacity: 14, 
     facilities: ['iluminación', 'baños'], 
     location: { address: 'Isla 5 - Zona Inferior', city: 'Ciudad Deportiva' }, 
-    status: 'reserved',
+    status: 'available',
     priority: 4, 
     isActive: true 
   },
@@ -170,7 +167,7 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     capacity: 12, 
     facilities: ['iluminación'], 
     location: { address: 'Isla 5 - Lateral Izquierdo', city: 'Ciudad Deportiva' }, 
-    status: 'maintenance', 
+    status: 'available', 
     priority: 5, 
     isActive: true 
   },
@@ -185,6 +182,36 @@ const DEFAULT_FIELDS: Omit<Field, 'id' | 'createdAt' | 'updatedAt'>[] = [
     priority: 5, 
     isActive: true 
   },
+  { 
+    code: 'Campo 15', 
+    name: 'Campo Deportivo 15', 
+    type: 'césped', 
+    capacity: 12, 
+    facilities: ['iluminación'], 
+    location: { address: 'Isla 5 - Lateral Izquierdo', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 5, 
+    isActive: true 
+  },
+  { 
+    code: 'Campo 16', 
+    name: 'Campo Deportivo 16', 
+    type: 'césped', 
+    capacity: 12, 
+    facilities: ['iluminación'], 
+    location: { address: 'Isla 5 - Lateral Izquierdo', city: 'Ciudad Deportiva' }, 
+    status: 'available', 
+    priority: 5, 
+    isActive: true 
+  },
+];
+
+// Datos para campos Zague
+const ZAGUE_FIELDS = [
+  { id: 'z1', code: 'Zague 1', status: 'available' as const, priority: 1 },
+  { id: 'z2', code: 'Zague 2', status: 'available' as const, priority: 2 },
+  { id: 'z3', code: 'Zague 3', status: 'available' as const, priority: 3 },
+  { id: 'z4', code: 'Zague 4', status: 'available' as const, priority: 4 },
 ];
 
 const Fields: React.FC = () => {
@@ -195,6 +222,7 @@ const Fields: React.FC = () => {
   const [view3D, setView3D] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [notification, setNotification] = useState<NotificationType | null>(null);
+  const [activeSede, setActiveSede] = useState<'cuemanco' | 'zague'>('cuemanco');
 
   useEffect(() => {
     loadFields();
@@ -231,8 +259,23 @@ const Fields: React.FC = () => {
     setShowDetails(true);
   };
 
-  const handleNavigate = (path: string) => {
-    navigate(path);
+  const handleZagueFieldClick = (fieldCode: string, status: Field['status']) => {
+    const mockField: Field = {
+      id: `zague-${fieldCode}`,
+      code: fieldCode,
+      name: `Campo Zague ${fieldCode.split(' ')[1]}`,
+      type: 'sintético',
+      capacity: 14,
+      facilities: ['iluminación', 'vestuarios'],
+      location: { address: 'Sede Zague - Zona Principal', city: 'Ciudad Deportiva' },
+      status,
+      priority: parseInt(fieldCode.split(' ')[1]),
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    setSelectedField(mockField);
+    setShowDetails(true);
   };
 
   const getStatusColor = (status: Field['status']) => {
@@ -272,20 +315,46 @@ const Fields: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-blue-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Header */}
+      {/* Header con botón de regreso */}
       <header className="pt-6 px-4 pb-3 bg-white dark:bg-gray-900 shadow-md sticky top-0 z-50">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+          >
+            <ArrowLeft size={20} />
+            <span className="font-semibold">Regresar a Dashboard</span>
+          </button>
+          
           <h1 className="text-xl font-extrabold tracking-tighter text-blue-700 dark:text-blue-400">TOCHO PRIME</h1>
-          <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Layout de Sedes</span>
         </div>
-        <div className="mt-2">
-          <h2 className="text-lg font-bold leading-tight">Mapa Maestro Cuemanco</h2>
-          <p className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-bold tracking-wider">Temporada Otoño 2024</p>
+        
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold leading-tight">Mapa Maestro de Sedes</h2>
+            <p className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-bold tracking-wider">
+              {activeSede === 'cuemanco' ? 'Cuemanco Isla 5' : 'Zague'} - Temporada Primavera 2026
+            </p>
+          </div>
         </div>
       </header>
 
-      {/* Status Legend */}
+      {/* Selector de sede y controles */}
       <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+        {/* Botón CAMPO ZAGUE */}
+        <button
+          onClick={() => setActiveSede(activeSede === 'cuemanco' ? 'zague' : 'cuemanco')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${
+            activeSede === 'zague'
+              ? 'bg-blue-600 text-white border-blue-700 shadow-md'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          <MapPin size={16} />
+          <span className="text-sm font-bold uppercase tracking-wider">CAMPO ZAGUE / CUEMANCO</span>
+        </button>
+        
+        {/* Status Legend */}
         <div className="flex gap-4 items-center">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
@@ -301,323 +370,332 @@ const Fields: React.FC = () => {
           </div>
         </div>
         
+        {/* Botón Vista 2D/3D */}
         <button
           onClick={() => setView3D(!view3D)}
-          className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         >
-          <Maximize2 size={14} />
-          <span className="text-xs font-bold uppercase tracking-wider">
+          <Maximize2 size={16} />
+          <span className="text-sm font-bold uppercase tracking-wider">
             {view3D ? 'Vista 2D' : 'Vista 3D'}
           </span>
         </button>
       </div>
 
-      {/* Main Map Container */}
-      <main className="relative flex-grow overflow-hidden min-h-[calc(100vh-180px)] bg-gradient-to-b from-blue-900 via-blue-800 to-cyan-800">
-        {/* Water Ripples */}
-        <div className="absolute w-40 h-40 top-1/4 -left-10 rounded-full bg-white/5 animate-pulse" style={{ animationDelay: '0s' }}></div>
-        <div className="absolute w-60 h-60 bottom-1/4 -right-20 rounded-full bg-white/5 animate-pulse" style={{ animationDelay: '2s' }}></div>
-        
-        {/* Lizards/Iguanas */}
-        <div className="absolute right-4 top-16 opacity-90 z-10">
-          <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center border-2 border-pink-400 shadow-md">
-            <span className="text-xs">🦎</span>
+      {/* Mapa de Zague */}
+      {activeSede === 'zague' ? (
+        <main className="relative flex-grow overflow-hidden min-h-[calc(100vh-180px)] bg-gradient-to-b from-green-900 via-green-800 to-emerald-800">
+          {/* Water Ripples */}
+          <div className="absolute w-40 h-40 top-1/4 -left-10 rounded-full bg-white/5 animate-pulse" style={{ animationDelay: '0s' }}></div>
+          <div className="absolute w-60 h-60 bottom-1/4 -right-20 rounded-full bg-white/5 animate-pulse" style={{ animationDelay: '2s' }}></div>
+          
+          {/* Map Layout Zague */}
+          <div className="relative w-full h-full max-w-sm mx-auto px-4 pt-12 pb-12 flex flex-col items-center justify-center">
+            <div className="bg-emerald-700/90 p-8 rounded-2xl border-4 border-green-900 grid grid-cols-2 gap-6 shadow-2xl relative z-20">
+              {ZAGUE_FIELDS.map((field) => (
+                <button
+                  key={field.id}
+                  onClick={() => handleZagueFieldClick(field.code, field.status)}
+                  className={`flex flex-col items-center justify-center rounded-xl border-4 border-white/30 w-32 h-32 shadow-2xl transition-all hover:scale-105 active:scale-95 ${
+                    field.status === 'available'
+                      ? 'bg-green-500 hover:bg-green-600'
+                      : field.status === 'reserved'
+                      ? 'bg-red-500 hover:bg-red-600'
+                      : field.status === 'maintenance'
+                      ? 'bg-yellow-500 hover:bg-yellow-600'
+                      : 'bg-gray-500 hover:bg-gray-600'
+                  }`}
+                >
+                  <span className="text-3xl font-extrabold text-white mb-2">{field.code.split(' ')[1]}</span>
+                  <span className="text-sm font-black uppercase text-white">
+                    {getStatusText(field.status)}
+                  </span>
+                  <span className="text-xs font-medium text-white/80 mt-1">Zague</span>
+                </button>
+              ))}
+              
+              {/* Facilities Icons */}
+              <div className="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-30">
+                <div className="bg-green-600 p-2 rounded-lg border border-white/30 shadow-lg">
+                  <Wifi size={18} className="text-white" />
+                </div>
+                <div className="bg-green-600 p-2 rounded-lg border border-white/30 shadow-lg">
+                  <Coffee size={18} className="text-white" />
+                </div>
+              </div>
+            </div>
+            
+            {/* Leyenda Zague */}
+            <div className="mt-8 text-center">
+              <h3 className="text-xl font-bold text-white mb-2">Sede Zague</h3>
+              <p className="text-white/80 text-sm">4 campos para Tocho</p>
+            </div>
           </div>
-        </div>
-        <div className="absolute left-8 bottom-32 opacity-90 z-10">
-          <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center border-2 border-pink-400 shadow-md">
-            <span className="text-base">🦎</span>
+        </main>
+      ) : (
+        /* Mapa de Cuemanco (original) */
+        <main className="relative flex-grow overflow-hidden min-h-[calc(100vh-180px)] bg-gradient-to-b from-blue-900 via-blue-800 to-cyan-800">
+          {/* Water Ripples */}
+          <div className="absolute w-40 h-40 top-1/4 -left-10 rounded-full bg-white/5 animate-pulse" style={{ animationDelay: '0s' }}></div>
+          <div className="absolute w-60 h-60 bottom-1/4 -right-20 rounded-full bg-white/5 animate-pulse" style={{ animationDelay: '2s' }}></div>
+          
+          {/* Lizards/Iguanas */}
+          <div className="absolute right-4 top-16 opacity-90 z-10">
+            <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center border-2 border-pink-400 shadow-md">
+              <span className="text-xs">🦎</span>
+            </div>
           </div>
-        </div>
+          <div className="absolute left-8 bottom-32 opacity-90 z-10">
+            <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center border-2 border-pink-400 shadow-md">
+              <span className="text-base">🦎</span>
+            </div>
+          </div>
 
-        {/* Map Layout */}
-        <div className="relative w-full h-full max-w-sm mx-auto px-4 pt-8 pb-12 flex flex-col">
-          {/* TOP AREA - Fields 7, 8, 9 */}
-          <div className="flex justify-center ml-16 z-20">
-            <div className="bg-emerald-600/90 p-2.5 rounded-xl border-4 border-blue-900 flex gap-2 shadow-xl">
-              {[7, 8, 9].map(num => {
-                const field = getFieldByNumber(num);
-                const status = field?.status || 'available';
-                const isReserved = status === 'reserved';
-                const isMaintenance = status === 'maintenance';
-                const isUnavailable = status === 'unavailable';
-                
-                return (
+          {/* Map Layout Cuemanco */}
+          <div className="relative w-full h-full max-w-sm mx-auto px-4 pt-8 pb-12 flex flex-col">
+            {/* TOP AREA - Fields 7, 8, 9 */}
+            <div className="flex justify-center ml-16 z-20">
+              <div className="bg-emerald-600/90 p-2.5 rounded-xl border-4 border-blue-900 flex gap-2 shadow-xl">
+                {[7, 8, 9].map(num => {
+                  const field = getFieldByNumber(num);
+                  const status = field?.status || 'available';
+                  const isReserved = status === 'reserved';
+                  const isMaintenance = status === 'maintenance';
+                  const isUnavailable = status === 'unavailable';
+                  
+                  return (
+                    <button
+                      key={num}
+                      onClick={() => field && handleFieldClick(field)}
+                      className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-20 shadow-inner transition-all hover:scale-105 active:scale-95 ${
+                        isReserved
+                          ? 'bg-red-500'
+                          : isMaintenance
+                          ? 'bg-yellow-500'
+                          : isUnavailable
+                          ? 'bg-gray-500'
+                          : 'bg-green-500'
+                      }`}
+                    >
+                      <span className="text-xl font-extrabold text-white">{num}</span>
+                      <span className="text-[8px] font-black uppercase text-white">
+                        {getStatusText(status)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Vertical Bridge */}
+            <div className="trajinera-path w-5 h-8 ml-[195px] -my-0.5 z-10 bg-amber-900 shadow-md">
+              <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+              <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+            </div>
+
+            {/* MAIN CONTENT AREA */}
+            <div className="flex gap-4">
+              {/* LEFT SIDE - Fields 13, 14, Soccer, 15, 16 */}
+              <div className="flex flex-col gap-4 z-20">
+                {/* Fields 13, 14 */}
+                <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 flex flex-col gap-2 shadow-lg">
+                  {[13, 14].map(num => {
+                    const field = getFieldByNumber(num);
+                    const status = field?.status || 'available';
+                    const isReserved = status === 'reserved';
+                    const isMaintenance = status === 'maintenance';
+                    const isUnavailable = status === 'unavailable';
+                    
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => field && handleFieldClick(field)}
+                        className={`flex items-center justify-center rounded border border-white/50 w-14 h-16 transition-all hover:scale-105 active:scale-95 ${
+                          isReserved
+                            ? 'bg-red-500'
+                            : isMaintenance
+                            ? 'bg-yellow-500'
+                            : isUnavailable
+                            ? 'bg-gray-500'
+                            : 'bg-green-500'
+                        }`}
+                      >
+                        <span className="text-lg font-extrabold text-white">{num}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Bridge */}
+                <div className="trajinera-path w-6 h-4 mx-auto -my-4 z-10 bg-amber-900 shadow-sm">
+                  <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+                </div>
+
+                {/* Soccer Field */}
+                <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 shadow-lg relative">
+                  <div className="flex items-center justify-center bg-green-500 rounded border border-white/50 w-14 h-28">
+                    <span className="text-xs font-black uppercase -rotate-90 tracking-tighter text-white">SOCCER</span>
+                  </div>
+                </div>
+
+                {/* Bridge */}
+                <div className="trajinera-path w-6 h-4 mx-auto -my-4 z-10 bg-amber-900 shadow-sm">
+                  <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+                </div>
+
+                {/* Fields 15, 16 */}
+                <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 flex flex-col gap-2 shadow-lg">
+                  {[15, 16].map(num => {
+                    const field = getFieldByNumber(num);
+                    const status = field?.status || 'available';
+                    const isReserved = status === 'reserved';
+                    const isMaintenance = status === 'maintenance';
+                    const isUnavailable = status === 'unavailable';
+                    
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => field && handleFieldClick(field)}
+                        className={`flex items-center justify-center rounded border border-white/50 w-14 h-12 transition-all hover:scale-105 active:scale-95 ${
+                          isReserved
+                            ? 'bg-red-500'
+                            : isMaintenance
+                            ? 'bg-yellow-500'
+                            : isUnavailable
+                            ? 'bg-gray-500'
+                            : 'bg-green-500'
+                        }`}
+                      >
+                        <span className="text-lg font-extrabold text-white">{num}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* RIGHT SIDE - Fields 1-6 and 10-12 */}
+              <div className="flex flex-col flex-grow items-end gap-0">
+                {/* Horizontal Bridge */}
+                <div className="flex items-center justify-end w-full">
+                  <div className="trajinera-path h-5 w-6 mr-[-4px] z-10 mt-12 bg-amber-900 shadow-sm">
+                    <div className="w-full flex flex-col justify-around py-1">
+                      <div className="w-full h-px bg-black/20"></div>
+                      <div className="w-full h-px bg-black/20"></div>
+                    </div>
+                  </div>
+                  
+                  {/* CENTRAL AREA - Fields 1-6 */}
+                  <div className="bg-emerald-600/90 p-3.5 rounded-xl border-4 border-blue-900 grid grid-cols-3 gap-2.5 shadow-2xl relative z-20">
+                    {[4, 5, 6, 1, 2, 3].map(num => {
+                      const field = getFieldByNumber(num);
+                      const status = field?.status || 'available';
+                      const isReserved = status === 'reserved';
+                      const isMaintenance = status === 'maintenance';
+                      const isUnavailable = status === 'unavailable';
+                      
+                      return (
+                        <button
+                          key={num}
+                          onClick={() => field && handleFieldClick(field)}
+                          className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-22 shadow-inner transition-all hover:scale-105 active:scale-95 ${
+                            isReserved
+                              ? 'bg-red-500'
+                              : isMaintenance
+                              ? 'bg-yellow-500'
+                              : isUnavailable
+                              ? 'bg-gray-500'
+                              : 'bg-green-500'
+                          }`}
+                        >
+                          <span className="text-xl font-extrabold text-white">{num}</span>
+                          <span className="text-[8px] font-black uppercase text-white">
+                            {getStatusText(status)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    
+                    {/* Facilities Icons */}
+                    <div className="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 z-30">
+                      <div className="bg-blue-600 p-1 rounded-md border border-white/30 shadow-md">
+                        <Waves size={14} className="text-white" />
+                      </div>
+                      <div className="bg-blue-600 p-1 rounded-md border border-white/30 shadow-md">
+                        <Coffee size={14} className="text-white" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vertical Bridge */}
+                <div className="trajinera-path w-5 h-8 mr-12 -my-1 z-10 bg-amber-900 shadow-md">
+                  <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+                  <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
+                </div>
+
+                {/* BOTTOM AREA - Fields 10, 11, 12 */}
+                <div className="bg-emerald-600/90 p-3 rounded-xl border-4 border-blue-900 flex flex-col gap-2.5 shadow-xl relative z-20">
+                  {/* Row with Fields 11 and 10 */}
+                  <div className="flex gap-2.5">
+                    {[11, 10].map(num => {
+                      const field = getFieldByNumber(num);
+                      const status = field?.status || 'available';
+                      const isReserved = status === 'reserved';
+                      const isMaintenance = status === 'maintenance';
+                      const isUnavailable = status === 'unavailable';
+                      
+                      return (
+                        <button
+                          key={num}
+                          onClick={() => field && handleFieldClick(field)}
+                          className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-18 shadow-inner transition-all hover:scale-105 active:scale-95 ${
+                            isReserved
+                              ? 'bg-red-500'
+                              : isMaintenance
+                              ? 'bg-yellow-500'
+                              : isUnavailable
+                              ? 'bg-gray-500'
+                              : 'bg-green-500'
+                          }`}
+                        >
+                          <span className="text-xl font-extrabold text-white">{num}</span>
+                          <span className="text-[8px] font-black uppercase text-white">
+                            {getStatusText(status)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Field 12 */}
                   <button
-                    key={num}
-                    onClick={() => field && handleFieldClick(field)}
-                    className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-20 shadow-inner transition-all hover:scale-105 active:scale-95 ${
-                      isReserved
+                    onClick={() => {
+                      const field12 = getFieldByNumber(12);
+                      if (field12) handleFieldClick(field12);
+                    }}
+                    className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-full h-14 shadow-inner transition-all hover:scale-105 active:scale-95 ${
+                      getFieldByNumber(12)?.status === 'reserved'
                         ? 'bg-red-500'
-                        : isMaintenance
+                        : getFieldByNumber(12)?.status === 'maintenance'
                         ? 'bg-yellow-500'
-                        : isUnavailable
+                        : getFieldByNumber(12)?.status === 'unavailable'
                         ? 'bg-gray-500'
                         : 'bg-green-500'
                     }`}
                   >
-                    <span className="text-xl font-extrabold text-white">{num}</span>
+                    <span className="text-xl font-extrabold text-white">12</span>
                     <span className="text-[8px] font-black uppercase text-white">
-                      {getStatusText(status)}
+                      {getStatusText(getFieldByNumber(12)?.status || 'available')}
                     </span>
                   </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Vertical Bridge */}
-          <div className="trajinera-path w-5 h-8 ml-[195px] -my-0.5 z-10 bg-amber-900 shadow-md">
-            <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
-            <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
-          </div>
-
-          {/* MAIN CONTENT AREA */}
-          <div className="flex gap-4">
-            {/* LEFT SIDE - Fields 13, 14, Soccer, 15, 16 */}
-            <div className="flex flex-col gap-4 z-20">
-              {/* Fields 13, 14 */}
-              <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 flex flex-col gap-2 shadow-lg">
-                {[13, 14].map(num => {
-                  const field = getFieldByNumber(num);
-                  const status = field?.status || 'available';
-                  const isReserved = status === 'reserved';
-                  const isMaintenance = status === 'maintenance';
-                  const isUnavailable = status === 'unavailable';
-                  
-                  return (
-                    <button
-                      key={num}
-                      onClick={() => field && handleFieldClick(field)}
-                      className={`flex items-center justify-center rounded border border-white/50 w-14 h-16 transition-all hover:scale-105 active:scale-95 ${
-                        isReserved
-                          ? 'bg-red-500'
-                          : isMaintenance
-                          ? 'bg-yellow-500'
-                          : isUnavailable
-                          ? 'bg-gray-500'
-                          : 'bg-green-500'
-                      }`}
-                    >
-                      <span className="text-lg font-extrabold text-white">{num}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Bridge */}
-              <div className="trajinera-path w-6 h-4 mx-auto -my-4 z-10 bg-amber-900 shadow-sm">
-                <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
-              </div>
-
-              {/* Soccer Field */}
-              <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 shadow-lg relative">
-                <div className="flex items-center justify-center bg-green-500 rounded border border-white/50 w-14 h-28">
-                  <span className="text-xs font-black uppercase -rotate-90 tracking-tighter text-white">SOCCER</span>
                 </div>
-              </div>
-
-              {/* Bridge */}
-              <div className="trajinera-path w-6 h-4 mx-auto -my-4 z-10 bg-amber-900 shadow-sm">
-                <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
-              </div>
-
-              {/* Fields 15, 16 */}
-              <div className="bg-emerald-600/90 p-2 rounded-lg border-4 border-blue-900 flex flex-col gap-2 shadow-lg">
-                {[15, 16].map(num => {
-                  const field = getFieldByNumber(num);
-                  const status = field?.status || 'available';
-                  const isReserved = status === 'reserved';
-                  const isMaintenance = status === 'maintenance';
-                  const isUnavailable = status === 'unavailable';
-                  
-                  return (
-                    <button
-                      key={num}
-                      onClick={() => field && handleFieldClick(field)}
-                      className={`flex items-center justify-center rounded border border-white/50 w-14 h-12 transition-all hover:scale-105 active:scale-95 ${
-                        isReserved
-                          ? 'bg-red-500'
-                          : isMaintenance
-                          ? 'bg-yellow-500'
-                          : isUnavailable
-                          ? 'bg-gray-500'
-                          : 'bg-green-500'
-                      }`}
-                    >
-                      <span className="text-lg font-extrabold text-white">{num}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* RIGHT SIDE - Fields 1-6 and 10-12 */}
-            <div className="flex flex-col flex-grow items-end gap-0">
-              {/* Horizontal Bridge */}
-              <div className="flex items-center justify-end w-full">
-                <div className="trajinera-path h-5 w-6 mr-[-4px] z-10 mt-12 bg-amber-900 shadow-sm">
-                  <div className="w-full flex flex-col justify-around py-1">
-                    <div className="w-full h-px bg-black/20"></div>
-                    <div className="w-full h-px bg-black/20"></div>
-                  </div>
-                </div>
-                
-                {/* CENTRAL AREA - Fields 1-6 */}
-                <div className="bg-emerald-600/90 p-3.5 rounded-xl border-4 border-blue-900 grid grid-cols-3 gap-2.5 shadow-2xl relative z-20">
-                  {[4, 5, 6, 1, 2, 3].map(num => {
-                    const field = getFieldByNumber(num);
-                    const status = field?.status || 'available';
-                    const isReserved = status === 'reserved';
-                    const isMaintenance = status === 'maintenance';
-                    const isUnavailable = status === 'unavailable';
-                    
-                    return (
-                      <button
-                        key={num}
-                        onClick={() => field && handleFieldClick(field)}
-                        className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-22 shadow-inner transition-all hover:scale-105 active:scale-95 ${
-                          isReserved
-                            ? 'bg-red-500'
-                            : isMaintenance
-                            ? 'bg-yellow-500'
-                            : isUnavailable
-                            ? 'bg-gray-500'
-                            : 'bg-green-500'
-                        }`}
-                      >
-                        <span className="text-xl font-extrabold text-white">{num}</span>
-                        <span className="text-[8px] font-black uppercase text-white">
-                          {getStatusText(status)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  
-                  {/* Facilities Icons */}
-                  <div className="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 z-30">
-                    <div className="bg-blue-600 p-1 rounded-md border border-white/30 shadow-md">
-                      <Waves size={14} className="text-white" />
-                    </div>
-                    <div className="bg-blue-600 p-1 rounded-md border border-white/30 shadow-md">
-                      <Coffee size={14} className="text-white" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Vertical Bridge */}
-              <div className="trajinera-path w-5 h-8 mr-12 -my-1 z-10 bg-amber-900 shadow-md">
-                <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
-                <div className="trajinera-line h-full w-px bg-black/20 mx-auto"></div>
-              </div>
-
-              {/* BOTTOM AREA - Fields 10, 11, 12 */}
-              <div className="bg-emerald-600/90 p-3 rounded-xl border-4 border-blue-900 flex flex-col gap-2.5 shadow-xl relative z-20">
-                {/* Row with Fields 11 and 10 */}
-                <div className="flex gap-2.5">
-                  {[11, 10].map(num => {
-                    const field = getFieldByNumber(num);
-                    const status = field?.status || 'available';
-                    const isReserved = status === 'reserved';
-                    const isMaintenance = status === 'maintenance';
-                    const isUnavailable = status === 'unavailable';
-                    
-                    return (
-                      <button
-                        key={num}
-                        onClick={() => field && handleFieldClick(field)}
-                        className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-16 h-18 shadow-inner transition-all hover:scale-105 active:scale-95 ${
-                          isReserved
-                            ? 'bg-red-500'
-                            : isMaintenance
-                            ? 'bg-yellow-500'
-                            : isUnavailable
-                            ? 'bg-gray-500'
-                            : 'bg-green-500'
-                        }`}
-                      >
-                        <span className="text-xl font-extrabold text-white">{num}</span>
-                        <span className="text-[8px] font-black uppercase text-white">
-                          {getStatusText(status)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                {/* Field 12 */}
-                <button
-                  onClick={() => {
-                    const field12 = getFieldByNumber(12);
-                    if (field12) handleFieldClick(field12);
-                  }}
-                  className={`flex flex-col items-center justify-center rounded-md border-2 border-white/40 w-full h-14 shadow-inner transition-all hover:scale-105 active:scale-95 ${
-                    getFieldByNumber(12)?.status === 'reserved'
-                      ? 'bg-red-500'
-                      : getFieldByNumber(12)?.status === 'maintenance'
-                      ? 'bg-yellow-500'
-                      : getFieldByNumber(12)?.status === 'unavailable'
-                      ? 'bg-gray-500'
-                      : 'bg-green-500'
-                  }`}
-                >
-                  <span className="text-xl font-extrabold text-white">12</span>
-                  <span className="text-[8px] font-black uppercase text-white">
-                    {getStatusText(getFieldByNumber(12)?.status || 'available')}
-                  </span>
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+      )}
 
-      {/* Status Legend Bar */}
-      <div className="px-4 py-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex items-center justify-center gap-8 text-[11px] font-bold">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 border border-white/50 rounded-sm shadow-sm"></div>
-          <span className="tracking-widest text-gray-700 dark:text-gray-300">LIBRE</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-500 border border-white/50 rounded-sm shadow-sm"></div>
-          <span className="tracking-widest text-gray-700 dark:text-gray-300">OCUPADO</span>
-        </div>
-      </div>
-
-      {/* Bottom Navigation */}
-      <nav className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-8 py-3 flex justify-between items-center z-50">
-        <button 
-          onClick={() => handleNavigate('/')}
-          className="flex flex-col items-center text-gray-400 hover:text-blue-600 transition-colors"
-        >
-          <Home size={20} />
-          <span className="text-[9px] font-bold uppercase mt-0.5">Inicio</span>
-        </button>
-        
-        <button className="flex flex-col items-center text-blue-600">
-          <MapPin size={20} />
-          <span className="text-[9px] font-bold uppercase mt-0.5">Mapas</span>
-        </button>
-        
-        <button 
-          onClick={() => handleNavigate('/calendario')}
-          className="flex flex-col items-center text-gray-400 hover:text-blue-600 transition-colors"
-        >
-          <Trophy size={20} />
-          <span className="text-[9px] font-bold uppercase mt-0.5">Torneos</span>
-        </button>
-        
-        <button 
-          onClick={() => handleNavigate('/jugador')}
-          className="flex flex-col items-center text-gray-400 hover:text-blue-600 transition-colors"
-        >
-          <User size={20} />
-          <span className="text-[9px] font-bold uppercase mt-0.5">Perfil</span>
-        </button>
-      </nav>
-
-      {/* Field Details Modal */}
+      {/* Field Details Modal (simplificado - sin facilidades) */}
       {selectedField && showDetails && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -687,20 +765,6 @@ const Fields: React.FC = () => {
                         key={i}
                         className={`w-3 h-3 rounded-full ${i < (selectedField.priority || 1) ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
                       />
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Facilidades</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedField.facilities.map((facility, index) => (
-                      <span 
-                        key={index}
-                        className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-md"
-                      >
-                        {facility}
-                      </span>
                     ))}
                   </div>
                 </div>
